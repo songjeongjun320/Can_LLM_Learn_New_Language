@@ -1,0 +1,23 @@
+Paper Review/
+KorQuAD_2.1_train_12/*.json
+KorQuAD_2.1_train_12/
+Samples/
+Samples_Result/
+adiamaan/
+/llama_result/
+/misc_dataset/
+/cropped_img
+/Samples_zip
+/screenshots
+
+*.zip
+*.pdf
+*.suo
+.venv
+*.vtt
+*.json
+*.png
+*.jpg
+*.txt
+*.csv
+.env
