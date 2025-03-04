@@ -1,7 +1,7 @@
 import json
 
 # result_origin_v4.json 파일 로드
-with open("result_origin_v4.json", "r", encoding="utf-8") as f:
+with open("result_origin_v5.json", "r", encoding="utf-8") as f:
     result_data = json.load(f)
 
 # subtitle.json 파일 로드
