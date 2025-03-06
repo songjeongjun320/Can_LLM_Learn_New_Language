@@ -22,6 +22,7 @@ adiamaan/
 *.jpg
 *.txt
 *.csv
+*.mp4
 .env
 /fine-tuned-models
 /.ipynb_checkpoints
