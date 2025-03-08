@@ -225,11 +225,16 @@ def take_screenshots(video_name, video_filename, subtitle_data, output_folder='y
 
     # 각 자막 시간대에 맞춰 스크린샷 찍기
     for sub in subtitle_data:
-        timestamp = sub['timestamp'] # 여기 오류남.
-        output_file = os.path.join(output_folder, f"frame_{sub['frame']}.png")
-        frame = video.get_frame(timestamp)
-        Image.fromarray(frame).save(output_file)
-        print(f"Screenshot saved: {output_file}")
+        timestamp = sub['timestamp']  # 여기 오류남.
+        frame_number = sub['frame']  # sub['frame']이 정수인지 확인
+        if isinstance(frame_number, int):
+            # 네 자리로 맞춰서 파일 이름 생성 (예: 1 -> 0001, 14 -> 0014)
+            output_file = os.path.join(output_folder, f"frame_{frame_number:04d}.png")
+            frame = video.get_frame(timestamp)
+            Image.fromarray(frame).save(output_file)
+            print(f"Screenshot saved: {output_file}")
+        else:
+            print(f"Invalid frame number: {frame_number}")
 
     video.close()
 
