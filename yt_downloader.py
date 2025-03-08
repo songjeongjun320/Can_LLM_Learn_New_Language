@@ -14,8 +14,10 @@ def download_video_and_subtitles(url, video_name, output_folder_video='yt_datase
     if not os.path.exists(output_folder_subtitle):
         os.makedirs(output_folder_subtitle)
 
+    cookies_path = "cookies.txt"
     # yt-dlp 설정
     ydl_opts = {
+        'cookies': cookies_path,  # 쿠키 파일 경로
         'format': 'best',  # 최고 품질로 다운로드
         'writesubtitles': True,  # 자막 다운로드
         'writeautomaticsub': True,  # 자동 생성 자막 다운로드
@@ -161,17 +163,20 @@ def extract_subtitles(subtitle_filename):
     with open(json_filename, 'r', encoding='utf-8') as f:
         subtitle_data = json.load(f)
     
-    # 홀수 인덱스 항목 제거
-    subtitle_data = [entry for i, entry in enumerate(subtitle_data) if i % 2 == 1]  # 홀수 인덱스를 제외
-    
+    # "context" 안에 "0000"이 포함된 항목 제거
+    subtitle_data_organized = [
+        entry for entry in subtitle_data 
+        if "0000" not in entry.get("context", "") and "000" not in entry.get("context", "") and not re.search(r'[a-zA-Z]', entry.get("context", ""))
+    ]
     # 재정렬된 index 값 다시 부여
-    for idx, entry in enumerate(subtitle_data):
+    for idx, entry in enumerate(subtitle_data_organized):
         entry['frame'] = idx + 1
     
+    count = 0
     # 타임스탬프 계산 및 업데이트
-    for i in range(len(subtitle_data)):
-        prev_end_timestamp = subtitle_data[i]['timestamp'].split(' --> ')[0]
-        next_start_timestamp = subtitle_data[i]['timestamp'].split(' --> ')[1]
+    for i in range(len(subtitle_data_organized)):
+        prev_end_timestamp = subtitle_data_organized[i]['timestamp'].split(' --> ')[0]
+        next_start_timestamp = subtitle_data_organized[i]['timestamp'].split(' --> ')[1]
 
         # 타임스탬프를 초로 변환
         prev_end_seconds = convert_timestamp_to_seconds(prev_end_timestamp)
@@ -184,21 +189,29 @@ def extract_subtitles(subtitle_filename):
         new_timestamp = convert_seconds_to_timestamp(mid_seconds)
         
         # 새로운 타임스탬프 업데이트 (시간:00:00 형태로 저장)
-        subtitle_data[i]['timestamp'] = f"{new_timestamp}"
+        subtitle_data_organized[i]['timestamp'] = f"{new_timestamp}"
         print(f"new_timestamp: ", new_timestamp)
+        count += 1
     
+    organized_json_filename = json_filename.replace('.ko.json', '_organized.ko.json')
     # 재정렬된 자막 데이터를 다시 저장
-    with open(json_filename, 'w', encoding='utf-8') as f:
-        json.dump(subtitle_data, f, ensure_ascii=False, indent=4)
+    with open(organized_json_filename, 'w', encoding='utf-8') as f:
+        json.dump(subtitle_data_organized, f, ensure_ascii=False, indent=4)
 
-    print(f"Filtered, re-indexed, and timestamp-adjusted subtitles saved to {json_filename}")
-    
+    print(f"Filtered, re-indexed, and timestamp-adjusted subtitles saved to {organized_json_filename}")
+
+    # .vtt 파일 삭제
+    if os.path.exists(json_filename):
+        os.remove(json_filename)
+        print(f"Deleted the original .json: {json_filename}")    
+
     # .vtt 파일 삭제
     if os.path.exists(subtitle_filename):
         os.remove(subtitle_filename)
         print(f"Deleted the original .vtt file: {subtitle_filename}")
     
-    return json_filename
+    print("Total subtitles: ", count)
+    return organized_json_filename, count
 
 
 def take_screenshots(video_name, video_filename, subtitle_data, output_folder='yt_dataset/screenshots'):
@@ -228,7 +241,7 @@ def main(url, video_name):
 
     time.sleep(2)
     # 자막 파일을 정제하고 JSON으로 저장
-    json_filename = extract_subtitles(subtitle_filename)
+    json_filename, count = extract_subtitles(subtitle_filename)
 
     time.sleep(2)
     # 스크린샷 찍기
@@ -236,9 +249,10 @@ def main(url, video_name):
     take_screenshots(video_name, video_filename, subtitle_data)
 
     print("모든 작업이 완료되었습니다!")
+    print("Subtitle Counts: ", count)
 
 if __name__ == "__main__":
     # YouTube 영상 URL과 비디오 이름 입력
-    video_url = input("YouTube 영상 URL을 입력하세요: ")
-    video_name = input("영상에 사용할 이름을 입력하세요: ")
+    video_url = input("YouTube video url: ")
+    video_name = input("Video Title: ")
     main(video_url, video_name)
