@@ -83,7 +83,7 @@ def process_vtt_file(file_path, output_file_path):
             if current_timestamp is not None and current_context:
                 context_text = " ".join(current_context).strip()
                 # 모든 띄어쓰기와 특수문자 제거 (한글, 영문, 숫자만 남김)
-                context_text = re.sub(r'[\s\W]+', '', context_text)
+                context_text = re.sub(r'[^\w\s]', '', context_text)  # 특수문자만 제거, 공백 유지
                 if context_text:
                     entry = {
                         "frame": current_index,
