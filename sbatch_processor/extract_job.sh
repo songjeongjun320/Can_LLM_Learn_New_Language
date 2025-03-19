@@ -25,7 +25,7 @@ if [ $# -eq 0 ]; then
 fi
 
 # Parse command line arguments
-drama_folder=""
+drama_folder_name=""
 ollama_host=""
 base_path="$DEFAULT_BASE_PATH"
 version="$DEFAULT_VERSION"
@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
         --drama)
-            drama_folder="$2"
+            drama_folder_name="$2"
             shift
             shift
             ;;
@@ -66,13 +66,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check if required parameters are provided
-if [[ -z "$drama_folder" || -z "$ollama_host" ]]; then
+if [[ -z "$drama_folder_name" || -z "$ollama_host" ]]; then
     echo "Error: Missing required parameters"
     print_usage
     exit 1
 fi
 
 # Submit the batch job
-sbatch drama_processor.sh --drama "$drama_folder" --host "$ollama_host" --path "$base_path" --version "$version"
+sbatch processor.sh --drama "$drama_folder_name" --host "$ollama_host" --path "$base_path" --version "$version"
 
-echo "Job submitted for drama folder: $drama_folder"
+echo "Job submitted for drama folder: $drama_folder_name"

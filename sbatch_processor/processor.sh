@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=drama_image_processing
-#SBATCH --output=drama_process_%j.out
-#SBATCH --error=drama_process_%j.err
+#SBATCH --output=process_%j.out
+#SBATCH --error=process_%j.err
 #SBATCH --time=24:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -10,10 +10,10 @@
 # Add any other SLURM parameters you need for your cluster
 
 # Parse command line arguments
-drama_folder=""
+drama_folder_name="/scratch/jsong132/Can_LLM_Learn_New_Language"
 ollama_host=""
 base_path=""
-version=""
+version="v2"
 
 # Help text
 print_usage() {
@@ -149,7 +149,7 @@ Description: This circumstance shows an educational environment in progress. A m
 [Now, describe the Circumstance I've shared and guess possible conversation:]
 """
 
-def process(base_path="/scratch/jsong132/Can_LLM_Learn_New_Language", drama_folder_name, version):
+def process(drama_folder_name, version, base_path):
     # 경로 설정
     base_path = base_path
     drama_folder_name = drama_folder_name
@@ -186,6 +186,7 @@ def process(base_path="/scratch/jsong132/Can_LLM_Learn_New_Language", drama_fold
     
         processed += 1
         log(f"Processing image ({processed}/{total_images}): {image_path.name}")
+        print(f"Processing image ({processed}/{total_images}): {image_path.name}", flush=True)
         start_time = time.time()
         
         try:
@@ -195,6 +196,8 @@ def process(base_path="/scratch/jsong132/Can_LLM_Learn_New_Language", drama_fold
                 base64_image = base64.b64encode(img_file.read()).decode("utf-8")
             encode_time = time.time() - encode_start
             log(f"Image encoded in {encode_time:.2f}s")
+            print(f"Image encoded in {encode_time:.2f}s",flush=True)
+
     
             # API 요청
             api_start = time.time()
@@ -213,8 +216,8 @@ def process(base_path="/scratch/jsong132/Can_LLM_Learn_New_Language", drama_fold
             api_time = time.time() - api_start
             log(f"API response received in {api_time:.2f}s")
             
-            # print("API Response:")
-            # print(response['message']['content'])
+            print("API Response:", flush=True)
+            print(response['message']['content'], flush=True)
     
             # 결과 저장
             results.append({
@@ -401,12 +404,12 @@ def process(base_path="/scratch/jsong132/Can_LLM_Learn_New_Language", drama_fold
     print(f"/Refined_Datas/{version}/Data_Final_Reversed/{drama_folder_name}_reversed_final.json 파일이 생성되었습니다.")
 
 if __name__ == "__main__":
-    process("$base_path", "$drama_folder_name", "$version")
+    process("$drama_folder", "$version", "$base_path")
 EOF
 
 # Log the parameters
 echo "Starting job with parameters:"
-echo "  Drama folder: $drama_folder"
+echo "  Drama folder: $drama_folder_name"
 echo "  Ollama host: $ollama_host"
 echo "  Base path: $base_path"
 echo "  Version: $version"
