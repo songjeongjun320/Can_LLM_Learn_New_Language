@@ -88,8 +88,8 @@ def preprocess_function(examples):
 if __name__ == "__main__":
     # Set paths and constants
     FOLDER_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/DB/Refined_Datas/v1/Data_Final_Reversed"
-    BASE_MODEL = "allenai/OLMo-1B"
-    OUTPUT_DIR = "fine-tuned-olmo1B-v13"
+    BASE_MODEL = "allenai/OLMo-7B"
+    OUTPUT_DIR = "Fine_Tuned_Results/olmo7B-v13"
     
     # Load and prepare data
     all_data = load_all_data(FOLDER_PATH)

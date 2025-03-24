@@ -18,6 +18,7 @@ adiamaan/
 klue_sts_results/
 Fine_Tuned_Results/
 .ipynb_checkpoints/
+DB/
 
 *.zip
 *.pdf

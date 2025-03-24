@@ -40,19 +40,19 @@ MODEL_CONFIGS = [
     #     output_dir="olmo1B-org-klue-sts"
     # ),
     ModelConfig(
-        name="OLMo-1b-tuned", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/fine-tuned-models/olmo1B-v11-80000", 
-        output_dir="olmo1B-tuned-klue-sts"
+        name="OLMo-1b-tuned-v12", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12", 
+        output_dir="olmo1B-v12-klue-sts"
     ),
+    # ModelConfig(
+    #     name="OLMo-7b-org", 
+    #     model_path="allenai/OLMo-7B", 
+    #     output_dir="olmo7B-org-klue-sts"
+    # ),
     ModelConfig(
-        name="OLMo-7b-org", 
-        model_path="allenai/OLMo-7B", 
-        output_dir="olmo7B-org-klue-sts"
-    ),
-    ModelConfig(
-        name="OLMo-7b-tuned", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/fine-tuned-models/olmo7B-v12-80000", 
-        output_dir="olmo7B-tuned-klue-sts"
+        name="OLMo-7b-tuned-v13", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/fine-tuned-models/olmo7B-v13", 
+        output_dir="olmo7B-v13-klue-sts"
     )
 ]
 
