@@ -15,8 +15,9 @@ adiamaan/
 /Data_llama_vision
 /Data_Final_Reversed
 /Data_Subtitles
-
-
+klue_sts_results/
+Fine_Tuned_Results/
+.ipynb_checkpoints/
 
 *.zip
 *.pdf
