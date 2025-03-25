@@ -17,8 +17,22 @@ import re
 from tqdm import tqdm
 import evaluate
 import ollama
+from dotenv import load_dotenv
+from huggingface_hub import login, HfApi
 
+# 명시적 로그인
+login(token="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")
 
+# 추가적인 확인
+api = HfApi()
+try:
+    # 모델 메타데이터 확인
+    model_info = api.model_info("meta-llama/Meta-Llama-3.2-3B")
+    print(model_info)
+except Exception as e:
+    print(f"Model access error: {e}")
+
+    
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,10 +63,15 @@ MODEL_CONFIGS = [
     #     model_path="allenai/OLMo-7B", 
     #     output_dir="klue_sts_results/olmo7B-org-klue-sts"
     # ),
-    ModelConfig(
-        name="OLMo-7b-v13", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
-        output_dir="klue_sts_results/olmo7B-v13-klue-sts"
+    # ModelConfig(
+    #     name="OLMo-7b-v13", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
+    #     output_dir="klue_sts_results/olmo7B-v13-klue-sts"
+    # ),
+        ModelConfig(
+        name="Llama-3.2-3B", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+        output_dir="klue_sts_results/llama3.2-3b-klue-sts"
     )
 ]
 
