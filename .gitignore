@@ -53,6 +53,9 @@ klue_sts_origin_cache/
 klue_sts_regression_cache/
 cache/
 klue_sts_regression_eval_cache/
+*cache*
+*cache*/
+
 
 *.log
 *.zip
