@@ -20,19 +20,7 @@ import ollama
 from dotenv import load_dotenv
 from huggingface_hub import login, HfApi
 
-# 명시적 로그인
-login(token="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")
-
-# 추가적인 확인
-api = HfApi()
-try:
-    # 모델 메타데이터 확인
-    model_info = api.model_info("meta-llama/Meta-Llama-3.2-3B")
-    print(model_info)
-except Exception as e:
-    print(f"Model access error: {e}")
-
-    
+  
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
