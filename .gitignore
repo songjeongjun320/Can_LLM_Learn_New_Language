@@ -19,6 +19,7 @@ klue_sts_results/
 Fine_Tuned_Results/
 .ipynb_checkpoints/
 DB/
+llama3.2_3b/
 
 *.zip
 *.pdf
