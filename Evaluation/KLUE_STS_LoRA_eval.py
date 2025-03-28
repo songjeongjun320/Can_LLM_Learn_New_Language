@@ -1,24 +1,32 @@
-import os
+# Standard library imports
 import json
-import torch
+import logging
+import os
+import re
+from tqdm import tqdm
+
+# Third-party imports
 import numpy as np
-from datasets import load_dataset
+import torch
+from datasets import load_dataset, Dataset
+from peft import (
+    LoraConfig,
+    PeftModel,
+    get_peft_model,
+    prepare_model_for_kbit_training
+)
+from peft.utils.other import fsdp_auto_wrap_policy
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    TrainingArguments,
-    Trainer,
+    BitsAndBytesConfig,
     DataCollatorForLanguageModeling,
-    EarlyStoppingCallback
+    Trainer,
+    TrainingArguments
 )
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-import logging
-import re
-from tqdm import tqdm
-import evaluate
-import ollama
-from dotenv import load_dotenv
-from huggingface_hub import login, HfApi
+from trl import SFTTrainer, SFTConfig
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -26,49 +34,32 @@ logger = logging.getLogger(__name__)
 
 # 모델 설정 클래스
 class ModelConfig:
-    def __init__(self, name, model_path, output_dir, is_ollama=False, ollama_host=None):
+    def __init__(self, name, model_path, output_dir):
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
-        self.is_ollama = is_ollama
-        self.ollama_host = ollama_host
 
-# 모델 설정들 (기본 OLMo 1B, OLMo 7B)
+# 모델 설정들
 MODEL_CONFIGS = [
-    # ModelConfig(
-    #     name="OLMo-1b-org", 
-    #     model_path="allenai/OLMo-1B", 
-    #     output_dir="klue_sts_results/olmo1B-org-klue-sts"
-    # ),
-    # ModelConfig(
-    #     name="OLMo-1b-v12", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12", 
-    #     output_dir="klue_sts_results/olmo1B-v12-klue-sts"
-    # ),
-    # ModelConfig(
-    #     name="OLMo-7b-org", 
-    #     model_path="allenai/OLMo-7B", 
-    #     output_dir="klue_sts_results/olmo7B-org-klue-sts"
-    # ),
-    # ModelConfig(
-    #     name="OLMo-7b-v13", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
-    #     output_dir="klue_sts_results/olmo7B-v13-klue-sts"
-    # ),
-        ModelConfig(
-        name="Llama-3.2-3B", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_sts_results/llama3.2-3b-klue-sts"
-    )
+    ModelConfig(
+        name="OLMo-7b-org-lora", 
+        model_path="allenai/OLMo-7B", 
+        output_dir="klue_sts_results/olmo7B-lora-klue-sts"
+    ),
+    ModelConfig(
+        name="OLMo-7b-v13-lora", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
+        output_dir="klue_sts_results/olmo7B-v13-lora-klue-sts"
+    ),
 ]
 
 # 기본 설정
 DATA_CACHE_DIR = "./klue_sts_origin_cache"
-JSON_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/klue_sts.json"
+JSON_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_sts.json"
 MAX_LENGTH = 512
 MAX_EVAL_SAMPLES = 200
 
-# 데이터셋 준비 함수 - JSON 파일 생성
+# 데이터셋 준비 함수 (이전 스크립트와 동일)
 def prepare_dataset_json():
     """KLUE STS 데이터셋을 불러와서 JSON 파일로 변환합니다."""
     if os.path.exists(JSON_DATASET_PATH):
@@ -105,7 +96,7 @@ def prepare_dataset_json():
         }
         train_samples.append(sample)
     
-    # 검증 데이터 준비 (메모리 절약을 위해 일부만 사용)
+    # 검증 데이터 준비
     logger.info("Translating Valid data...")
     val_subset = klue_sts["validation"]
     for item in tqdm(val_subset):
@@ -133,54 +124,99 @@ def prepare_dataset_json():
     
     logger.info(f"Created klue_sts dataset: {JSON_DATASET_PATH}")
 
-# 데이터 전처리 함수
-def preprocess_function(examples, tokenizer, max_length=MAX_LENGTH):
-    # 프롬프트 형식
-    inputs = tokenizer([ex for ex in examples["input"]], 
-                      truncation=True, 
-                      max_length=max_length,
-                      padding="max_length",
-                      return_tensors="pt")
-    
-    # 출력 토큰화
-    with tokenizer.as_target_tokenizer():
-        labels = tokenizer([ex for ex in examples["output"]], 
-                         truncation=True, 
-                         max_length=128,  # 출력은 짧기 때문에 더 작은 길이 사용
-                         padding="max_length",
-                         return_tensors="pt")
-    
-    # 라벨 처리: -100은 손실 계산에서 무시됨
-    for i in range(len(labels["input_ids"])):
-        labels["input_ids"][i][labels["input_ids"][i] == tokenizer.pad_token_id] = -100
-    
-    return {
-        "input_ids": inputs["input_ids"],
-        "attention_mask": inputs["attention_mask"],
-        "labels": labels["input_ids"]
-    }
-
 # 모델 및 토크나이저 로드 함수
 def load_model_and_tokenizer(model_config):
-    """모델 설정에 따라 모델과 토크나이저를 로드합니다."""
+    """LoRA를 위한 모델과 토크나이저 로드"""
     logger.info(f"Load model: {model_config.model_path}")
 
-    # 일반적인 HuggingFace 모델 로드 (OLMo 1B, OLMo 7B)
+    # 토크나이저 로드
     tokenizer = AutoTokenizer.from_pretrained(model_config.model_path, trust_remote_code=True)
     
     # 특수 토큰 확인 및 설정
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # bfloat16 정밀도로 모델 로드 (메모리 효율성 증가)
+    # 4비트 양자화 모델 로드 (quantization_config만 사용)
     model = AutoModelForCausalLM.from_pretrained(
         model_config.model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",  # 자동으로 GPU에 모델 분산
-        trust_remote_code=True  # OLMo 모델에 필요
+        device_map="auto",
+        trust_remote_code=True,
+        quantization_config=BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+        )
     )
     
+    # 나머지 코드는 동일하게 유지
+    model = prepare_model_for_kbit_training(model)
+    print("Check the model architecture")
+    # print(model)
+    
+    # target_modules = fsdp_auto_wrap_policy(model) # Make PEFT find target automatically
+    # LoRA 설정
+    lora_config = LoraConfig(
+        r=16,
+        lora_alpha=32,
+        lora_dropout=0.1,
+        bias="none",
+        task_type="CAUSAL_LM",
+        target_modules=["att_proj", "attn_out"]  # OLMo model attention projection layer targetting
+
+    )
+    
+    model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
+    
     return model, tokenizer
+
+# 학습 데이터셋 클래스
+class SimpleDataset(torch.utils.data.Dataset):
+    def __init__(self, data, tokenizer, max_length):
+        self.data = data
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        item = self.data[idx]
+        prompt = item["input"]
+        completion = item["output"]
+        
+        # 프롬프트와 완성 결합
+        full_text = prompt + completion
+        
+        # 토큰화
+        encoded = self.tokenizer(
+            full_text,
+            truncation=True,
+            max_length=self.max_length,
+            padding="max_length",
+            return_tensors="pt"
+        )
+        
+        # 프롬프트 부분 토큰화 (라벨 마스킹용)
+        prompt_encoded = self.tokenizer(
+            prompt,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt"
+        )
+        
+        # 라벨 생성: 프롬프트 부분은 -100으로 마스킹
+        labels = encoded["input_ids"].clone().squeeze(0)
+        prompt_length = prompt_encoded["input_ids"].shape[1]
+        labels[:prompt_length] = -100
+        
+        return {
+            "input_ids": encoded["input_ids"].squeeze(0),
+            "attention_mask": encoded["attention_mask"].squeeze(0),
+            "labels": labels
+        }
 
 # 메인 학습 함수
 def train_model(model_config):
@@ -200,70 +236,28 @@ def train_model(model_config):
     # 모델 및 토크나이저 로드
     model, tokenizer = load_model_and_tokenizer(model_config)
     
-    # 학습용 데이터셋 생성
-    from torch.utils.data import Dataset
+    train_dataset = Dataset.from_dict({
+        "text": [f"{item['input']}{item['output']}" for item in train_data]
+    })
+    val_dataset = Dataset.from_dict({
+        "text": [f"{item['input']}{item['output']}" for item in val_data]
+    })
     
-    class SimpleDataset(Dataset):
-        def __init__(self, data, tokenizer, max_length):
-            self.data = data
-            self.tokenizer = tokenizer
-            self.max_length = max_length
-        
-        def __len__(self):
-            return len(self.data)
-        
-        def __getitem__(self, idx):
-            item = self.data[idx]
-            prompt = item["input"]
-            completion = item["output"]
-            
-            # 프롬프트와 완성 결합
-            full_text = prompt + completion
-            
-            # 토큰화
-            encoded = self.tokenizer(
-                full_text,
-                truncation=True,
-                max_length=self.max_length,
-                padding="max_length",
-                return_tensors="pt"
-            )
-            
-            # 프롬프트 부분 토큰화 (라벨 마스킹용)
-            prompt_encoded = self.tokenizer(
-                prompt,
-                truncation=True,
-                max_length=self.max_length,
-                return_tensors="pt"
-            )
-            
-            # 라벨 생성: 프롬프트 부분은 -100으로 마스킹
-            labels = encoded["input_ids"].clone().squeeze(0)
-            prompt_length = prompt_encoded["input_ids"].shape[1]
-            labels[:prompt_length] = -100
-            
-            return {
-                "input_ids": encoded["input_ids"].squeeze(0),
-                "attention_mask": encoded["attention_mask"].squeeze(0),
-                "labels": labels
-            }
-    
-    # 데이터셋 생성
-    train_dataset = SimpleDataset(train_data, tokenizer, MAX_LENGTH)
-    val_dataset = SimpleDataset(val_data, tokenizer, MAX_LENGTH)
-    
-    # 데이터 콜레이터
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False
+    # LoRA 설정 추가
+    peft_params = LoraConfig(
+        lora_alpha=16,  # LoRA 스케일링 팩터
+        lora_dropout=0.1,  # LoRA 드롭아웃 비율
+        r=64,  # LoRA 랭크
+        bias="none",  
+        task_type="CAUSAL_LM",
+        target_modules=["att_proj", "attn_out"]  # OLMo model attention layer targetting
     )
     
-    # 학습 하이퍼파라미터 설정
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=model_config.output_dir,
         eval_strategy="steps",
         eval_steps=200,
-        learning_rate=2e-5,
+        learning_rate=2e-4,
         per_device_train_batch_size=4,
         per_device_eval_batch_size=4,
         gradient_accumulation_steps=4,
@@ -275,58 +269,43 @@ def train_model(model_config):
         logging_dir="./logs",
         logging_steps=100,
         fp16=False,
-        bf16=True,  # bfloat16 정밀도 사용
+        bf16=True,
         lr_scheduler_type="cosine",
         warmup_ratio=0.1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         report_to="none",
-        gradient_checkpointing=True,  # 메모리 절약을 위한 그래디언트 체크포인팅
-        optim="adamw_torch",  # PyTorch 구현 사용
+        gradient_checkpointing=True,
+        optim="adamw_torch",
     )
-    
-    # 얼리 스토핑 콜백
-    early_stopping_callback = EarlyStoppingCallback(
-        early_stopping_patience=5
-    )
-    
-    # 트레이너 초기화 및 학습
-    logger.info("Reset Trainer...")
-    trainer = Trainer(
+
+    # SFTTrainer 초기화 시 tokenizer와 packing 제거
+    logger.info("Setting up SFTTrainer...")
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        data_collator=data_collator,
-        callbacks=[early_stopping_callback],
+        peft_config=peft_params,
     )
-    
+
     # 학습 실행
+    logger.info("Starting training...")
     trainer.train()
     
-    # 최종 모델 및 토크나이저 저장
+    # 최종 모델 저장 (PEFT 모델로)
     final_model_path = os.path.join(model_config.output_dir, "final")
-    logger.info(f"Final Model: {final_model_path}")
+    logger.info(f"Saving final model to: {final_model_path}")
     
-    # Ollama 모델이 아닌 경우에만 저장 (로컬 모델)
-    if not model_config.is_ollama:
-        model.save_pretrained(final_model_path)
-        tokenizer.save_pretrained(final_model_path)
-    else:
-        # Ollama 모델의 경우 토크나이저만 저장
-        tokenizer.save_pretrained(final_model_path)
-        # Ollama 모델 정보 저장
-        with open(os.path.join(final_model_path, "ollama_config.json"), "w") as f:
-            json.dump({
-                "model": model_config.model_path,
-                "host": model_config.ollama_host
-            }, f)
+    # PEFT 모델과 토크나이저 저장
+    trainer.model.save_pretrained(final_model_path)
+    tokenizer.save_pretrained(final_model_path)
     
-    logger.info("Tuned!")
+    logger.info("Fine-tuning completed!")
     return model, tokenizer
 
-# 모델 평가 함수 (Ollama API 지원 추가)
-def evaluate_model(model, tokenizer, model_config="OLMo7b"):
+# 모델 평가 함수 (이전 스크립트와 거의 동일)
+def evaluate_model(model, tokenizer, model_config):
     logger.info(f"Evaluating the model: {model_config.name}")
     
     # KLUE STS 데이터셋 로드
@@ -366,11 +345,11 @@ def evaluate_model(model, tokenizer, model_config="OLMo7b"):
         # 결과 디코딩
         generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-        # 간단한 정규식으로 0-5 사이의 소수점 숫자 추출 (단어 경계 없이)
+        # 간단한 정규식으로 0-5 사이의 소수점 숫자 추출
         matches = re.findall(r'([0-5](?:\.\d+)?)', generated_text)
         predicted_score = None
         
-        # 먼저 "The similarity score is" 다음에 오는 숫자를 찾아보기
+        # "The similarity score is" 다음에 오는 숫자를 찾아보기
         if "The similarity score is" in generated_text:
             after_score_text = generated_text.split("The similarity score is")[1].strip()
             score_matches = re.findall(r'([0-5](?:\.\d+)?)', after_score_text)
@@ -387,10 +366,10 @@ def evaluate_model(model, tokenizer, model_config="OLMo7b"):
 
         # 로그 저장을 위한 데이터
         log_data = {
-            "input": sentence1 + " | " + sentence2,  # 입력 문장 쌍
-            "generated_text": generated_text,  # 생성된 텍스트
-            "true_score": true_score,  # 실제 점수
-            "predicted_score": predicted_score # 예측 점수
+            "input": sentence1 + " | " + sentence2,
+            "generated_text": generated_text,
+            "true_score": true_score,
+            "predicted_score": predicted_score
         }
         
         logs.append(log_data)
@@ -421,18 +400,6 @@ def evaluate_model(model, tokenizer, model_config="OLMo7b"):
         mse = mean_squared_error(true_scores, pred_scores)
         logger.info(f"MSE: {mse:.4f}")
 
-        # 평가 지표 로드
-        # bleu_metric = evaluate.load("bleu")  # ✅ 변경된 부분
-        # bleu_score = bleu_metric.compute(predictions=[pred_scores], references=[true_scores])
-        # rouge_metric = evaluate.load("rouge")  # ✅ 변경된 부분
-        # rouge_score = rouge_metric.compute(predictions=[pred_scores], references=[true_scores])
-        
-        # 실제로는 여러 개의 예측문장이 있을 수 있으므로, 적절한 형식으로 데이터를 맞춰야 함
-        # bleu_score = bleu_metric.compute(predictions=[pred_scores], references=[true_scores])
-        # logger.info(f"BLEU: {bleu_score['bleu']:.4f}")
-        # rouge_score = rouge_metric.compute(predictions=[pred_scores], references=[true_scores])
-        # logger.info(f"ROUGE: {rouge_score['rouge']:.4f}")
-
         # 평가 결과를 파일에 저장
         eval_results = {
             "model": model_config.name,
@@ -440,8 +407,6 @@ def evaluate_model(model, tokenizer, model_config="OLMo7b"):
             "rmse": float(rmse),
             "mae": float(mae),
             "mse": float(mse),
-            # "bleu": float(bleu_score['bleu']),
-            # "rouge": float(rouge_score['rouge']),
             "num_samples": len(true_scores)
         }
 
