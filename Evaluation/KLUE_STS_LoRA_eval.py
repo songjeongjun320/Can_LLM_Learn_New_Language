@@ -41,16 +41,31 @@ class ModelConfig:
 
 # 모델 설정들
 MODEL_CONFIGS = [
+    # ModelConfig(
+    #     name="lora-olmo1B-org-klue-sts", 
+    #     model_path="allenai/OLMo-1B", 
+    #     output_dir="klue_sts_results/olmo1B-lora-org-klue-sts"
+    # ),
+    # ModelConfig(
+    #     name="lora-olmo1B-v12-klue-sts", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12", 
+    #     output_dir="klue_sts_results/lora-olmo1B-v12-klue-sts"
+    # ),
+    # ModelConfig(
+    #     name="lora-olmo7B-org-klue-sts", 
+    #     model_path="allenai/OLMo-7B", 
+    #     output_dir="klue_sts_results/lora-olmo7B-org-klue-sts"
+    # ),
+    # ModelConfig(
+    #     name="lora-olmo7B-v13-klue-sts", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
+    #     output_dir="klue_sts_results/lora-olmo7B-v13-klue-sts"
+    # ),
     ModelConfig(
-        name="OLMo-7b-org-lora", 
-        model_path="allenai/OLMo-7B", 
-        output_dir="klue_sts_results/olmo7B-lora-klue-sts"
-    ),
-    ModelConfig(
-        name="OLMo-7b-v13-lora", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
-        output_dir="klue_sts_results/olmo7B-v13-lora-klue-sts"
-    ),
+        name="lora-llama3.2:3b-klue-sts", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+        output_dir="klue_sts_results/lora-llama3.2:3b-klue-sts"
+    )
 ]
 
 # 기본 설정
@@ -155,20 +170,8 @@ def load_model_and_tokenizer(model_config):
     print("Check the model architecture")
     # print(model)
     
-    # target_modules = fsdp_auto_wrap_policy(model) # Make PEFT find target automatically
-    # LoRA 설정
-    lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.1,
-        bias="none",
-        task_type="CAUSAL_LM",
-        target_modules=["att_proj", "attn_out"]  # OLMo model attention projection layer targetting
-
-    )
-    
-    model = get_peft_model(model, lora_config)
-    model.print_trainable_parameters()
+    model = prepare_model_for_kbit_training(model)
+    # model.print_trainable_parameters() # Only for OLMo
     
     return model, tokenizer
 
@@ -250,9 +253,14 @@ def train_model(model_config):
         r=64,  # LoRA 랭크
         bias="none",  
         task_type="CAUSAL_LM",
-        target_modules=["att_proj", "attn_out"]  # OLMo model attention layer targetting
+        # target_modules=["att_proj", "attn_out"],  # OLMo model attention layer targetting
+        target_modules=["q_proj", "k_proj"]  # Llama model
     )
-    
+
+    # 모델 및 토크나이저 로드 시 LoRA 설정 적용
+    model = get_peft_model(model, peft_params)
+    model.print_trainable_parameters()
+
     training_args = SFTConfig(
         output_dir=model_config.output_dir,
         eval_strategy="steps",
