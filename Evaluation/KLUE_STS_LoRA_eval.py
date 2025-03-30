@@ -41,11 +41,11 @@ class ModelConfig:
 
 # 모델 설정들
 MODEL_CONFIGS = [
-    # ModelConfig(
-    #     name="lora-olmo1B-org-klue-sts", 
-    #     model_path="allenai/OLMo-1B", 
-    #     output_dir="klue_sts_results/olmo1B-lora-org-klue-sts"
-    # ),
+    ModelConfig(
+        name="lora-olmo1B-org-klue-sts", 
+        model_path="allenai/OLMo-1B", 
+        output_dir="klue_sts_results/olmo1B-lora-org-klue-sts"
+    ),
     # ModelConfig(
     #     name="lora-olmo1B-v12-klue-sts", 
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12", 
@@ -61,11 +61,11 @@ MODEL_CONFIGS = [
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
     #     output_dir="klue_sts_results/lora-olmo7B-v13-klue-sts"
     # ),
-    ModelConfig(
-        name="lora-llama3.2:3b-klue-sts", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_sts_results/lora-llama3.2:3b-klue-sts"
-    )
+    # ModelConfig(
+    #     name="lora-llama3.2:3b-klue-sts", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+    #     output_dir="klue_sts_results/lora-llama3.2:3b-klue-sts"
+    # )
 ]
 
 # 기본 설정
@@ -151,18 +151,11 @@ def load_model_and_tokenizer(model_config):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # 4비트 양자화 모델 로드 (quantization_config만 사용)
     model = AutoModelForCausalLM.from_pretrained(
         model_config.model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
-        trust_remote_code=True,
-        quantization_config=BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_use_double_quant=True,
-        )
+        device_map="auto",  # 자동으로 GPU에 모델 분산
+        trust_remote_code=True  # OLMo 모델에 필요
     )
     
     # 나머지 코드는 동일하게 유지
@@ -253,8 +246,8 @@ def train_model(model_config):
         r=64,  # LoRA 랭크
         bias="none",  
         task_type="CAUSAL_LM",
-        # target_modules=["att_proj", "attn_out"],  # OLMo model attention layer targetting
-        target_modules=["q_proj", "k_proj"]  # Llama model
+        target_modules=["att_proj", "attn_out"],  # OLMo model attention layer targetting
+        # target_modules=["q_proj", "k_proj"]  # Llama model
     )
 
     # 모델 및 토크나이저 로드 시 LoRA 설정 적용
