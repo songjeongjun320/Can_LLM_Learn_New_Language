@@ -9,9 +9,10 @@ from transformers import (
     Trainer, 
     DataCollatorForLanguageModeling
 )
-from peft import get_peft_model, LoraConfig  # Import LoRA modules
+from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training  # Import LoRA modules
 import logging
 from tqdm import tqdm
+from trl import SFTTrainer, SFTConfig
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # Configure logging
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     # Set paths and constants
     FOLDER_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/DB/Refined_Datas/v1/Data_Final_Reversed"
     BASE_MODEL = "allenai/OLMo-7B"
-    OUTPUT_DIR = "Fine_Tuned_Results/olmo7B-v13"
+    OUTPUT_DIR = "Fine_Tuned_Results/Lora_olmo7B"
     
     # Load and prepare data
     all_data = load_all_data(FOLDER_PATH)
@@ -115,74 +116,80 @@ if __name__ == "__main__":
     
     # Memory-efficient model loading
     model = AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL, 
-        trust_remote_code=True,
+        BASE_MODEL,
         torch_dtype=torch.bfloat16,
-        device_map="auto"  # Automatically distribute model across available GPUs
+        device_map="auto",  # 자동으로 GPU에 모델 분산
+        trust_remote_code=True  # OLMo 모델에 필요
     )
-    
-    # LoRA configuration
-    lora_config = LoraConfig(
-        r=8,  # rank of low-rank decomposition
-        lora_alpha=32,  # scaling factor
-        lora_dropout=0.1,  # dropout rate
-        bias="none",  # apply bias term (optional)
-    )
-    
-    # Apply LoRA to the model
-    model = get_peft_model(model, lora_config)
     
     # Tokenize datasets
     logger.info("Tokenizing datasets...")
-    tokenized_train = dataset["train"].map(
+    train_dataset = dataset["train"].map(
         preprocess_function, 
         batched=True, 
         remove_columns=dataset["train"].column_names,
         num_proc=os.cpu_count(),  # Use all available CPU cores
         desc="Tokenizing training data"
     )
-    tokenized_eval = dataset["test"].map(
+    train_dataset = train_dataset.with_format("torch")
+
+    val_dataset = dataset["test"].map(
         preprocess_function, 
         batched=True, 
         remove_columns=dataset["test"].column_names,
         num_proc=os.cpu_count(),
         desc="Tokenizing validation data"
     )
-    
+    val_dataset = val_dataset.with_format("torch")
+
+    peft_params = LoraConfig(
+        lora_alpha=8,  # LoRA 스케일링 팩터
+        lora_dropout=0.1,  # LoRA 드롭아웃 비율
+        r=32,  # LoRA 랭크
+        bias="none",  
+        task_type="CAUSAL_LM",
+        target_modules=["att_proj", "attn_out"],  # OLMo model attention layer targetting
+        # target_modules=["q_proj", "k_proj"]  # Llama model
+    )    
+
+    # Apply LoRA to the model
+    model = prepare_model_for_kbit_training(model)
+    model = get_peft_model(model, peft_params)
+    model.print_trainable_parameters()
+
     # Set up training arguments
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=OUTPUT_DIR,
-        evaluation_strategy="steps",
-        eval_steps=500,
-        learning_rate=5e-5,
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=4,
-        gradient_accumulation_steps=8,
-        num_train_epochs=3,
+        eval_strategy="steps",
+        eval_steps=200,
+        learning_rate=2e-4,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        gradient_accumulation_steps=2,
+        dataloader_num_workers=4,
+        num_train_epochs=5,
         weight_decay=0.01,
         save_total_limit=3,
         save_strategy="steps",
-        save_steps=500,
+        save_steps=400,
         logging_dir="./logs",
         logging_steps=100,
         fp16=False,
-        bf16=True,  # Use bfloat16 precision
+        bf16=True,
         lr_scheduler_type="cosine",
         warmup_ratio=0.1,
-        adam_beta1=0.9,
-        adam_beta2=0.999,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
-        report_to="none",  # Disable external logging
-        # Additional optimizations
-        gradient_checkpointing=True,  # Save memory with gradient checkpointing
-        optim="adamw_torch",  # Use more efficient optimizer
+        report_to="none",
+        gradient_checkpointing=True,
+        optim="adamw_torch",
     )
     
     # Initialize data collator
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
-        mlm=False
+        mlm=False,
+        pad_to_multiple_of=8  # A100의 Tensor Core 최적화
     )
     
     # Create checkpoint directory
@@ -190,16 +197,27 @@ if __name__ == "__main__":
     
     # Initialize trainer and start training
     logger.info("Initializing trainer and starting fine-tuning...")
-    trainer = Trainer(
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
-        train_dataset=tokenized_train,
-        eval_dataset=tokenized_eval,
-        data_collator=data_collator,
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
+        peft_config=peft_params,
     )
-    
+
+    # 학습 시작 전 최적화
+    torch.cuda.empty_cache()  # GPU 캐시 정리
+    torch.backends.cuda.matmul.allow_tf32 = True  # A100에서 TF32 활성화
+    torch.backends.cudnn.allow_tf32 = True
+    model.train()             # 학습 모드 명시적 설정
+
     # Run training
-    trainer.train()
+    # trainer.train(resume_from_checkpoint=False)  # 체크포인트 재개 방지
+
+    # Check Point
+    checkpoint_path = "/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Lora_olmo7B/checkpoint-12400"
+    trainer.train(resume_from_checkpoint=checkpoint_path)
+
     
     # Save final model and tokenizer
     logger.info(f"Saving final model to: {OUTPUT_DIR}")
