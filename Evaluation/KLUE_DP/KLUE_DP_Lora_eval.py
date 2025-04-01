@@ -1,21 +1,33 @@
+# Standard library imports
+import json
+import logging
 import os
 import re
-import json
-import torch
+from tqdm import tqdm
+
+# Third-party imports
 import numpy as np
+import torch
+from datasets import load_dataset, Dataset
+from peft import (
+    LoraConfig,
+    PeftModel,
+    get_peft_model,
+    prepare_model_for_kbit_training
+)
+from peft.utils.other import fsdp_auto_wrap_policy
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    TrainingArguments,
+    BitsAndBytesConfig,
+    DataCollatorForLanguageModeling,
     Trainer,
-    EarlyStoppingCallback
+    TrainingArguments
 )
-from sklearn.metrics import accuracy_score, f1_score
-import logging
-from tqdm import tqdm
-from torch.utils.data import Dataset
-import torch.nn.functional as F
-from datasets import load_dataset
+from trl import SFTTrainer, SFTConfig
+
 
 # Setup logging
 logging.basicConfig(
@@ -53,36 +65,36 @@ class ModelConfig:
 
 # Model configurations (from first code)
 MODEL_CONFIGS = [
-    # ModelConfig(
-    #     name="full-OLMo-1b-org", 
-    #     model_path="allenai/OLMo-1B", 
-    #     output_dir="klue_dp_results/full-olmo1B-org-klue-dp",
-    #     is_local=False
-    # ),
+    ModelConfig(
+        name="full-OLMo-1b-org", 
+        model_path="allenai/OLMo-1B", 
+        output_dir="klue_dp_results/full-olmo1B-org-klue-dp",
+        is_local=False
+    ),
     ModelConfig(
         name="full-OLMo-1b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
         output_dir="klue_dp_results/full-olmo1B-v12-klue-dp",
         is_local=True
     ),
-    # ModelConfig(
-    #     name="full-OLMo-7b-org", 
-    #     model_path="allenai/OLMo-7B", 
-    #     output_dir="klue_dp_results/full-olmo7B-org-klue-dp",
-    #     is_local=False
-    # ),
+    ModelConfig(
+        name="full-OLMo-7b-org", 
+        model_path="allenai/OLMo-7B", 
+        output_dir="klue_dp_results/full-olmo7B-org-klue-dp",
+        is_local=False
+    ),
     ModelConfig(
         name="full-OLMo-7b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
         output_dir="klue_dp_results/full-olmo7B-v13-klue-dp",
         is_local=True
     ),
-    # ModelConfig(
-    #     name="full-Llama-3.2:3B", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-    #     output_dir="klue_dp_results/full-llama3.2-3b-klue-dp",
-    #     is_local=True
-    # )
+    ModelConfig(
+        name="full-Llama-3.2:3B", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+        output_dir="klue_dp_results/full-llama3.2-3b-klue-dp",
+        is_local=True
+    )
 ]
 
 # Configuration parameters
@@ -360,9 +372,6 @@ class DependencyParser(torch.nn.Module):
             "label_logits": label_logits
         }
 
-# Custom Trainer for language modeling approach
-from transformers import DataCollatorForLanguageModeling
-
 def train_model(model_config):
     """Train the model for dependency parsing using language modeling approach."""
     logger.info(f"Starting training for {model_config.name}")
@@ -389,15 +398,32 @@ def train_model(model_config):
         mlm=False
     )
     
-    # Training arguments
+    target_module = ["att_proj", "attn_out"]
+    if (model_config.name == "full-Llama-3.2:3B"):
+        targe_module = ["q_proj", "k_proj"]
+
+    # LoRA 설정 추가
+    peft_params = LoraConfig(
+        lora_alpha=16,  # LoRA 스케일링 팩터
+        lora_dropout=0.1,  # LoRA 드롭아웃 비율
+        r=64,  # LoRA 랭크
+        bias="none",  
+        task_type="CAUSAL_LM",
+        target_modules=targe_module
+    )
+
+    # 모델 및 토크나이저 로드 시 LoRA 설정 적용
+    model = get_peft_model(model, peft_params)
+    model.print_trainable_parameters()
+
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
         evaluation_strategy="steps",
         eval_steps=200,
         learning_rate=2e-5,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
-        gradient_accumulation_steps=2,
+        per_device_train_batch_size=8,  # 배치 크기 증가
+        per_device_eval_batch_size=8,  # 배치 크기 증가
+        gradient_accumulation_steps=2,  # 축적 단계 감소
         num_train_epochs=5,
         weight_decay=0.01,
         save_total_limit=3,
@@ -405,44 +431,40 @@ def train_model(model_config):
         save_steps=400,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
-        fp16=False,
-        bf16=True,  # Use bfloat16 precision
+        fp16=True,  # FP16으로 전환
+        bf16=False,  # BF16 비활성화
         lr_scheduler_type="cosine",
-        warmup_ratio=0.1,
+        warmup_ratio=0.05,  # Warmup 비율 감소
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         report_to="none",
-        gradient_checkpointing=True,  # Enable gradient checkpointing for memory efficiency
-        optim="adamw_torch",
-        )
-    
-    # Early stopping callback
-    early_stopping_callback = EarlyStoppingCallback(
-        early_stopping_patience=5
+        gradient_checkpointing=False,  # 체크포인팅 비활성화
+        optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
     )
-    
-    # Initialize trainer
-    logger.info("Initializing trainer")
-    trainer = Trainer(
+
+    # SFTTrainer 초기화 시 tokenizer와 packing 제거
+    logger.info("Setting up SFTTrainer...")
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        data_collator=data_collator,
-        callbacks=[early_stopping_callback],
+        peft_config=peft_params,
     )
-    
-    # Start training
-    logger.info("Starting training")
+
+    # 학습 실행
+    logger.info("Starting training...")
     trainer.train()
     
-    # Save final model and tokenizer
+    # 최종 모델 저장 (PEFT 모델로)
     final_model_path = os.path.join(model_config.output_dir, "final")
     logger.info(f"Saving final model to: {final_model_path}")
-    model.save_pretrained(final_model_path)
+    
+    # PEFT 모델과 토크나이저 저장
+    trainer.model.save_pretrained(final_model_path)
     tokenizer.save_pretrained(final_model_path)
     
-    logger.info(f"Training completed for {model_config.name}")
+    logger.info("Fine-tuning completed!")
     return model, tokenizer
 
 # Function to parse model outputs and extract heads and relations

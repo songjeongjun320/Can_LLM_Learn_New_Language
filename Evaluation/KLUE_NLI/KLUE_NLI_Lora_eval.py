@@ -1,19 +1,32 @@
-import os
+# Standard library imports
 import json
-import torch
-import numpy as np
-from transformers import (
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
-    TrainingArguments,
-    Trainer,
-    EarlyStoppingCallback
-)
-from sklearn.metrics import precision_recall_f1_support, accuracy_score
 import logging
+import os
+import re
 from tqdm import tqdm
-from torch.utils.data import Dataset
-from datasets import load_dataset
+
+# Third-party imports
+import numpy as np
+import torch
+from datasets import load_dataset, Dataset
+from peft import (
+    LoraConfig,
+    PeftModel,
+    get_peft_model,
+    prepare_model_for_kbit_training
+)
+from peft.utils.other import fsdp_auto_wrap_policy
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+    DataCollatorForLanguageModeling,
+    Trainer,
+    TrainingArguments
+)
+from trl import SFTTrainer, SFTConfig
 
 # Setup logging
 logging.basicConfig(
@@ -30,7 +43,7 @@ logger = logging.getLogger(__name__)
 NLI_LABELS = ["entailment", "neutral", "contradiction"]
 NUM_LABELS = len(NLI_LABELS)
 LABEL2ID = {label: idx for idx, label in enumerate(NLI_LABELS)}
-ID2LABEL = {idx: label for idx, label in enumerate(NER_TAGS)}
+ID2LABEL = {idx: label for idx, label in enumerate(NLI_LABELS)}
 logger.info(f"Total number of KLUE-NLI labels: {NUM_LABELS}")
 
 # Model configuration class
@@ -152,6 +165,21 @@ class NLIDataset(Dataset):
 
 # Training function
 def train_model(model_config):
+    # Compute metrics function
+    def compute_metrics(p):
+        predictions, labels = p
+        predictions = np.argmax(predictions, axis=1)
+        
+        accuracy = accuracy_score(labels, predictions)
+        precision, recall, f1, _ = precision_recall_f1_support(labels, predictions, average="macro", zero_division=0)
+        
+        return {
+            "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1
+        }
+
     """Train the model for NLI using sequence classification approach."""
     logger.info(f"Starting training for {model_config.name}")
     
@@ -166,7 +194,24 @@ def train_model(model_config):
     val_dataset = NLIDataset(JSON_VAL_DATASET_PATH, tokenizer)
     logger.info(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
     
-    # Training arguments
+    target_module = ["att_proj", "attn_out"]
+    if (model_config.name == "full-Llama-3.2:3B"):
+        targe_module = ["q_proj", "k_proj"]
+
+    # LoRA 설정 추가
+    peft_params = LoraConfig(
+        lora_alpha=16,  # LoRA 스케일링 팩터
+        lora_dropout=0.1,  # LoRA 드롭아웃 비율
+        r=64,  # LoRA 랭크
+        bias="none",  
+        task_type="CAUSAL_LM",
+        target_modules=targe_module
+    )
+
+    # 모델 및 토크나이저 로드 시 LoRA 설정 적용
+    model = get_peft_model(model, peft_params)
+    model.print_trainable_parameters()
+
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
         evaluation_strategy="steps",
@@ -182,53 +227,40 @@ def train_model(model_config):
         save_steps=400,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
-        fp16=False,  # FP16으로 전환
-        bf16=True,  # BF16 비활성화
+        fp16=True,  # FP16으로 전환
+        bf16=False,  # BF16 비활성화
         lr_scheduler_type="cosine",
-        warmup_ratio=0.1,  # Warmup 비율 감소
+        warmup_ratio=0.05,  # Warmup 비율 감소
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         report_to="none",
-        gradient_checkpointing=True,  # 체크포인팅 비활성화
+        gradient_checkpointing=False,  # 체크포인팅 비활성화
         optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
     )
-    
-    # Compute metrics function
-    def compute_metrics(p):
-        predictions, labels = p
-        predictions = np.argmax(predictions, axis=1)
-        
-        accuracy = accuracy_score(labels, predictions)
-        precision, recall, f1, _ = precision_recall_f1_support(labels, predictions, average="macro", zero_division=0)
-        
-        return {
-            "accuracy": accuracy,
-            "precision": precision,
-            "recall": recall,
-            "f1": f1
-        }
-    
-    # Trainer
-    trainer = Trainer(
+
+    # SFTTrainer 초기화 시 tokenizer와 packing 제거
+    logger.info("Setting up SFTTrainer...")
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        compute_metrics=compute_metrics,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
+        peft_config=peft_params,
     )
-    
-    # Train
-    logger.info("Starting training")
+
+    # 학습 실행
+    logger.info("Starting training...")
     trainer.train()
     
-    # Save model
+    # 최종 모델 저장 (PEFT 모델로)
     final_model_path = os.path.join(model_config.output_dir, "final")
     logger.info(f"Saving final model to: {final_model_path}")
-    model.save_pretrained(final_model_path)
+    
+    # PEFT 모델과 토크나이저 저장
+    trainer.model.save_pretrained(final_model_path)
     tokenizer.save_pretrained(final_model_path)
     
-    logger.info(f"Training completed for {model_config.name}")
+    logger.info("Fine-tuning completed!")
     return model, tokenizer
 
 # Evaluation function

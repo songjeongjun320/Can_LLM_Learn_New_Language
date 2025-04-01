@@ -29,10 +29,9 @@ class ModelConfig:
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
-        self.is_local = is_
+        self.is_local = is_local
 
 # Model configurations
-# 모델 설정들 (기본 OLMo 1B, OLMo 7B)
 MODEL_CONFIGS = [
     ModelConfig(
         name="full-OLMo-1b-org", 
@@ -68,74 +67,81 @@ MODEL_CONFIGS = [
 
 # 기본 설정
 DATA_CACHE_DIR = "./klue_sts_origin_cache"
-JSON_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/klue_sts.json"
+JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_sts_train.json"
+JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_sts_validation.json"
 MAX_LENGTH = 512
 MAX_EVAL_SAMPLES = 200
 
-# 데이터셋 준비 함수 - JSON 파일 생성
 def prepare_dataset_json():
-    """KLUE STS 데이터셋을 불러와서 JSON 파일로 변환합니다."""
+    """이미 저장된 JSON 파일에서 KLUE STS 데이터셋을 불러와서 전처리한 후, 통합 JSON 파일로 저장합니다."""
     if os.path.exists(JSON_DATASET_PATH):
         logger.info(f"Dataset already exists: {JSON_DATASET_PATH}")
         return
-    
-    logger.info("KLUE STS dataset loading...")
-    klue_sts = load_dataset("klue", "sts", cache_dir=DATA_CACHE_DIR)
-    
-    # 학습 및 검증 데이터를 위한 리스트
+
+    # JSON 파일 존재 여부 확인 및 불러오기
+    if not os.path.exists(JSON_TRAIN_DATASET_PATH):
+        logger.error(f"Train dataset file does not exist: {JSON_TRAIN_DATASET_PATH}")
+        return
+    if not os.path.exists(JSON_VAL_DATASET_PATH):
+        logger.error(f"Validation dataset file does not exist: {JSON_VAL_DATASET_PATH}")
+        return
+
+    logger.info("Loading train dataset from JSON file...")
+    with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
+        train_data = json.load(f)
+
+    logger.info("Loading validation dataset from JSON file...")
+    with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
+        val_data = json.load(f)
+
     train_samples = []
     val_samples = []
-    
-    # 함수: 프롬프트와 완성 텍스트 생성
+
     def create_prompt(sentence1, sentence2):
-        return f"Analyze the following sentence pairs and provide a similarity score between 0 and 5, where 0 means completely different and 5 means identical in meaning. Sentence 1: {sentence1} Sentence 2: {sentence2}"
+        return (
+            f"Analyze the following sentence pairs and provide a similarity score between 0 and 5, "
+            f"where 0 means completely different and 5 means identical in meaning. "
+            f"Sentence 1: {sentence1} Sentence 2: {sentence2}"
+        )
 
     def create_completion(score):
         return f" The similarity score is {score}"
-    
-    # 학습 데이터 준비
-    logger.info("Creating Klue_dataset.json ...")
-    for item in tqdm(klue_sts["train"]):
+
+    logger.info("Processing train data...")
+    for item in tqdm(train_data):
         sentence1 = item["sentence1"]
         sentence2 = item["sentence2"]
         score = item["labels"]["label"]  # 0-5 척도
-        
-        # 스코어 정규화
         normalized_score = max(0, min(5, score))
-        
         sample = {
             "input": create_prompt(sentence1, sentence2),
             "output": create_completion(normalized_score)
         }
         train_samples.append(sample)
-    
-    # 검증 데이터 준비 (메모리 절약을 위해 일부만 사용)
-    logger.info("Translating Valid data...")
-    val_subset = klue_sts["validation"]
-    for item in tqdm(val_subset):
+
+    logger.info("Processing validation data...")
+    for item in tqdm(val_data):
         sentence1 = item["sentence1"]
         sentence2 = item["sentence2"]
         score = item["labels"]["label"]
-        
         normalized_score = max(0, min(5, score))
-        
         sample = {
             "input": create_prompt(sentence1, sentence2),
             "output": create_completion(normalized_score)
         }
         val_samples.append(sample)
-    
-    # JSON 파일로 저장
+
     dataset = {
         "train": train_samples,
         "validation": val_samples
     }
-    
-    logger.info(f"JSON dataset saving... (train: {len(train_samples)}, valid: {len(val_samples)})")
+
+    logger.info(f"Saving combined JSON dataset... (train: {len(train_samples)}, valid: {len(val_samples)})")
     with open(JSON_DATASET_PATH, "w", encoding="utf-8") as f:
         json.dump(dataset, f, ensure_ascii=False, indent=2)
-    
+
     logger.info(f"Created klue_sts dataset: {JSON_DATASET_PATH}")
+
 
 # 데이터 전처리 함수
 def preprocess_function(examples, tokenizer, max_length=MAX_LENGTH):

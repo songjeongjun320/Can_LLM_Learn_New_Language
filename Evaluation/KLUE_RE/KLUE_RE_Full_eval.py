@@ -58,9 +58,10 @@ RE_LABELS = [
     "per:title"
 ]
 NUM_LABELS = len(RE_LABELS)
-LABEL2ID = {label: idx for idx, label in enumerate(RE_LABELS)}
-ID2LABEL = {idx: label for label, idx in enumerate(RE_LABELS)}
+LABEL2ID = {label: idx for idx, label in enumerate(RE_LABELS)}  # 레이블 -> 인덱스
+ID2LABEL = {idx: label for idx, label in enumerate(RE_LABELS)}  # 인덱스 -> 레이블
 logger.info(f"Total number of KLUE-RE labels: {NUM_LABELS}")
+
 
 # Model configuration class
 class ModelConfig:
@@ -68,7 +69,7 @@ class ModelConfig:
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
-        self.is_local = is_
+        self.is_local = is_local
 
 # Model configurations
 # 모델 설정들 (기본 OLMo 1B, OLMo 7B)
@@ -132,13 +133,12 @@ def load_model_and_tokenizer(model_config):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # bfloat16 정밀도로 모델 로드 (메모리 효율성 증가)
-    model = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForSequenceClassification.from_pretrained(
         model_config.model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",  # 자동으로 GPU에 모델 분산
+        device_map="auto",
         local_files_only=is_local,
-        trust_remote_code=True  # OLMo 모델에 필요
+        trust_remote_code=True
     )
     
     return model, tokenizer

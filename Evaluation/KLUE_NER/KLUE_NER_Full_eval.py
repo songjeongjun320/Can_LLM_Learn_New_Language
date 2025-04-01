@@ -54,7 +54,7 @@ class ModelConfig:
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
-        self.is_local = is_
+        self.is_local = is_local
 
 # 모델 설정들 (기본 OLMo 1B, OLMo 7B)
 MODEL_CONFIGS = [

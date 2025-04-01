@@ -32,187 +32,154 @@ from trl import SFTTrainer, SFTConfig
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 모델 설정 클래스
 class ModelConfig:
-    def __init__(self, name, model_path, output_dir):
+    def __init__(self, name, model_path, output_dir, is_local):
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
+        self.is_local = is_local
 
-# 모델 설정들
+# Model configurations
 MODEL_CONFIGS = [
     ModelConfig(
-        name="lora-olmo1B-org-klue-sts", 
+        name="full-OLMo-1b-org", 
         model_path="allenai/OLMo-1B", 
-        output_dir="klue_sts_results/olmo1B-lora-org-klue-sts"
+        output_dir="klue_sts_results/full-olmo1B-org-klue-sts",
+        is_local=False
     ),
-    # ModelConfig(
-    #     name="lora-olmo1B-v12-klue-sts", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12", 
-    #     output_dir="klue_sts_results/lora-olmo1B-v12-klue-sts"
-    # ),
-    # ModelConfig(
-    #     name="lora-olmo7B-org-klue-sts", 
-    #     model_path="allenai/OLMo-7B", 
-    #     output_dir="klue_sts_results/lora-olmo7B-org-klue-sts"
-    # ),
-    # ModelConfig(
-    #     name="lora-olmo7B-v13-klue-sts", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
-    #     output_dir="klue_sts_results/lora-olmo7B-v13-klue-sts"
-    # ),
-    # ModelConfig(
-    #     name="lora-llama3.2:3b-klue-sts", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-    #     output_dir="klue_sts_results/lora-llama3.2:3b-klue-sts"
-    # )
+    ModelConfig(
+        name="full-OLMo-1b", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+        output_dir="klue_sts_results/full-olmo1B-v12-klue-sts",
+        is_local=True
+    ),
+    ModelConfig(
+        name="full-OLMo-7b-org", 
+        model_path="allenai/OLMo-7B", 
+        output_dir="klue_sts_results/full-olmo7B-org-klue-sts",
+        is_local=False
+    ),
+    ModelConfig(
+        name="full-OLMo-7b", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+        output_dir="klue_sts_results/full-olmo7B-v13-klue-sts",
+        is_local=True
+    ),
+        ModelConfig(
+        name="full-Llama-3.2:3B", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+        output_dir="klue_sts_results/full-llama3.2-3b-klue-sts",
+        is_local=True
+    )
 ]
 
 # 기본 설정
 DATA_CACHE_DIR = "./klue_sts_origin_cache"
-JSON_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_sts.json"
+JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_sts_train.json"
+JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_sts_validation.json"
 MAX_LENGTH = 512
 MAX_EVAL_SAMPLES = 200
 
-# 데이터셋 준비 함수 (이전 스크립트와 동일)
 def prepare_dataset_json():
-    """KLUE STS 데이터셋을 불러와서 JSON 파일로 변환합니다."""
+    """이미 저장된 JSON 파일에서 KLUE STS 데이터셋을 불러와서 전처리한 후, 통합 JSON 파일로 저장합니다."""
     if os.path.exists(JSON_DATASET_PATH):
         logger.info(f"Dataset already exists: {JSON_DATASET_PATH}")
         return
-    
-    logger.info("KLUE STS dataset loading...")
-    klue_sts = load_dataset("klue", "sts", cache_dir=DATA_CACHE_DIR)
-    
-    # 학습 및 검증 데이터를 위한 리스트
+
+    # JSON 파일 존재 여부 확인 및 불러오기
+    if not os.path.exists(JSON_TRAIN_DATASET_PATH):
+        logger.error(f"Train dataset file does not exist: {JSON_TRAIN_DATASET_PATH}")
+        return
+    if not os.path.exists(JSON_VAL_DATASET_PATH):
+        logger.error(f"Validation dataset file does not exist: {JSON_VAL_DATASET_PATH}")
+        return
+
+    logger.info("Loading train dataset from JSON file...")
+    with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
+        train_data = json.load(f)
+
+    logger.info("Loading validation dataset from JSON file...")
+    with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
+        val_data = json.load(f)
+
     train_samples = []
     val_samples = []
-    
-    # 함수: 프롬프트와 완성 텍스트 생성
+
     def create_prompt(sentence1, sentence2):
-        return f"Analyze the following sentence pairs and provide a similarity score between 0 and 5, where 0 means completely different and 5 means identical in meaning. Sentence 1: {sentence1} Sentence 2: {sentence2}"
+        return (
+            f"Analyze the following sentence pairs and provide a similarity score between 0 and 5, "
+            f"where 0 means completely different and 5 means identical in meaning. "
+            f"Sentence 1: {sentence1} Sentence 2: {sentence2}"
+        )
 
     def create_completion(score):
         return f" The similarity score is {score}"
-    
-    # 학습 데이터 준비
-    logger.info("Creating Klue_dataset.json ...")
-    for item in tqdm(klue_sts["train"]):
+
+    logger.info("Processing train data...")
+    for item in tqdm(train_data):
         sentence1 = item["sentence1"]
         sentence2 = item["sentence2"]
         score = item["labels"]["label"]  # 0-5 척도
-        
-        # 스코어 정규화
         normalized_score = max(0, min(5, score))
-        
         sample = {
             "input": create_prompt(sentence1, sentence2),
             "output": create_completion(normalized_score)
         }
         train_samples.append(sample)
-    
-    # 검증 데이터 준비
-    logger.info("Translating Valid data...")
-    val_subset = klue_sts["validation"]
-    for item in tqdm(val_subset):
+
+    logger.info("Processing validation data...")
+    for item in tqdm(val_data):
         sentence1 = item["sentence1"]
         sentence2 = item["sentence2"]
         score = item["labels"]["label"]
-        
         normalized_score = max(0, min(5, score))
-        
         sample = {
             "input": create_prompt(sentence1, sentence2),
             "output": create_completion(normalized_score)
         }
         val_samples.append(sample)
-    
-    # JSON 파일로 저장
+
     dataset = {
         "train": train_samples,
         "validation": val_samples
     }
-    
-    logger.info(f"JSON dataset saving... (train: {len(train_samples)}, valid: {len(val_samples)})")
+
+    logger.info(f"Saving combined JSON dataset... (train: {len(train_samples)}, valid: {len(val_samples)})")
     with open(JSON_DATASET_PATH, "w", encoding="utf-8") as f:
         json.dump(dataset, f, ensure_ascii=False, indent=2)
-    
+
     logger.info(f"Created klue_sts dataset: {JSON_DATASET_PATH}")
 
-# 모델 및 토크나이저 로드 함수
+# Model and tokenizer loading function
 def load_model_and_tokenizer(model_config):
-    """LoRA를 위한 모델과 토크나이저 로드"""
+    """모델 설정에 따라 모델과 토크나이저를 로드합니다."""
     logger.info(f"Load model: {model_config.model_path}")
 
-    # 토크나이저 로드
-    tokenizer = AutoTokenizer.from_pretrained(model_config.model_path, trust_remote_code=True)
+    is_local=False
+    if (model_config.is_local):
+        is_local = True
+
+    # 일반적인 HuggingFace 모델 로드 (OLMo 1B, OLMo 7B)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_config.model_path, 
+        local_files_only=is_local,
+        trust_remote_code=True
+        )
     
     # 특수 토큰 확인 및 설정
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
+    # bfloat16 정밀도로 모델 로드 (메모리 효율성 증가)
     model = AutoModelForCausalLM.from_pretrained(
         model_config.model_path,
         torch_dtype=torch.bfloat16,
         device_map="auto",  # 자동으로 GPU에 모델 분산
+        local_files_only=is_local,
         trust_remote_code=True  # OLMo 모델에 필요
     )
     
-    # 나머지 코드는 동일하게 유지
-    model = prepare_model_for_kbit_training(model)
-    print("Check the model architecture")
-    # print(model)
-    
-    model = prepare_model_for_kbit_training(model)
-    # model.print_trainable_parameters() # Only for OLMo
-    
     return model, tokenizer
-
-# 학습 데이터셋 클래스
-class SimpleDataset(torch.utils.data.Dataset):
-    def __init__(self, data, tokenizer, max_length):
-        self.data = data
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-    
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        item = self.data[idx]
-        prompt = item["input"]
-        completion = item["output"]
-        
-        # 프롬프트와 완성 결합
-        full_text = prompt + completion
-        
-        # 토큰화
-        encoded = self.tokenizer(
-            full_text,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt"
-        )
-        
-        # 프롬프트 부분 토큰화 (라벨 마스킹용)
-        prompt_encoded = self.tokenizer(
-            prompt,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt"
-        )
-        
-        # 라벨 생성: 프롬프트 부분은 -100으로 마스킹
-        labels = encoded["input_ids"].clone().squeeze(0)
-        prompt_length = prompt_encoded["input_ids"].shape[1]
-        labels[:prompt_length] = -100
-        
-        return {
-            "input_ids": encoded["input_ids"].squeeze(0),
-            "attention_mask": encoded["attention_mask"].squeeze(0),
-            "labels": labels
-        }
 
 # 메인 학습 함수
 def train_model(model_config):
@@ -239,6 +206,10 @@ def train_model(model_config):
         "text": [f"{item['input']}{item['output']}" for item in val_data]
     })
     
+    target_module = ["att_proj", "attn_out"]
+    if (model_config.name == "full-Llama-3.2:3B"):
+        targe_module = ["q_proj", "k_proj"]
+
     # LoRA 설정 추가
     peft_params = LoraConfig(
         lora_alpha=16,  # LoRA 스케일링 팩터
@@ -246,8 +217,7 @@ def train_model(model_config):
         r=64,  # LoRA 랭크
         bias="none",  
         task_type="CAUSAL_LM",
-        target_modules=["att_proj", "attn_out"],  # OLMo model attention layer targetting
-        # target_modules=["q_proj", "k_proj"]  # Llama model
+        target_modules=targe_module
     )
 
     # 모델 및 토크나이저 로드 시 LoRA 설정 적용
