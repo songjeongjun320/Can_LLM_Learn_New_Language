@@ -23,39 +23,46 @@ from huggingface_hub import login, HfApi
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 모델 설정 클래스
+# Model configuration class
 class ModelConfig:
-    def __init__(self, name, model_path, output_dir):
+    def __init__(self, name, model_path, output_dir, is_local):
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
+        self.is_local = is_
 
+# Model configurations
 # 모델 설정들 (기본 OLMo 1B, OLMo 7B)
 MODEL_CONFIGS = [
     ModelConfig(
         name="full-OLMo-1b-org", 
         model_path="allenai/OLMo-1B", 
-        output_dir="klue_sts_results/full-olmo1B-org-klue-sts"
+        output_dir="klue_sts_results/full-olmo1B-org-klue-sts",
+        is_local=False
     ),
     ModelConfig(
-        name="full-OLMo-1b-v12", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12", 
-        output_dir="klue_sts_results/full-olmo1B-v12-klue-sts"
+        name="full-OLMo-1b", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+        output_dir="klue_sts_results/full-olmo1B-v12-klue-sts",
+        is_local=True
     ),
     ModelConfig(
         name="full-OLMo-7b-org", 
         model_path="allenai/OLMo-7B", 
-        output_dir="klue_sts_results/full-olmo7B-org-klue-sts"
+        output_dir="klue_sts_results/full-olmo7B-org-klue-sts",
+        is_local=False
     ),
     ModelConfig(
-        name="full-OLMo-7b-v13", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
-        output_dir="klue_sts_results/full-olmo7B-v13-klue-sts"
+        name="full-OLMo-7b", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+        output_dir="klue_sts_results/full-olmo7B-v13-klue-sts",
+        is_local=True
     ),
         ModelConfig(
         name="full-Llama-3.2:3B", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_sts_results/full-llama3.2-3b-klue-sts"
+        output_dir="klue_sts_results/full-llama3.2-3b-klue-sts",
+        is_local=True
     )
 ]
 
@@ -157,13 +164,21 @@ def preprocess_function(examples, tokenizer, max_length=MAX_LENGTH):
         "labels": labels["input_ids"]
     }
 
-# 모델 및 토크나이저 로드 함수
+# Model and tokenizer loading function
 def load_model_and_tokenizer(model_config):
     """모델 설정에 따라 모델과 토크나이저를 로드합니다."""
     logger.info(f"Load model: {model_config.model_path}")
 
+    is_local=False
+    if (model_config.is_local):
+        is_local = True
+
     # 일반적인 HuggingFace 모델 로드 (OLMo 1B, OLMo 7B)
-    tokenizer = AutoTokenizer.from_pretrained(model_config.model_path, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_config.model_path, 
+        local_files_only=is_local,
+        trust_remote_code=True
+        )
     
     # 특수 토큰 확인 및 설정
     if tokenizer.pad_token is None:
@@ -174,6 +189,7 @@ def load_model_and_tokenizer(model_config):
         model_config.model_path,
         torch_dtype=torch.bfloat16,
         device_map="auto",  # 자동으로 GPU에 모델 분산
+        local_files_only=is_local,
         trust_remote_code=True  # OLMo 모델에 필요
     )
     
@@ -255,7 +271,7 @@ def train_model(model_config):
         mlm=False
     )
     
-    # 학습 하이퍼파라미터 설정
+    # Training arguments
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
         evaluation_strategy="steps",
@@ -271,14 +287,14 @@ def train_model(model_config):
         save_steps=400,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
-        fp16=True,  # FP16으로 전환
-        bf16=False,  # BF16 비활성화
+        fp16=False,  # FP16으로 전환
+        bf16=True,  # BF16 비활성화
         lr_scheduler_type="cosine",
-        warmup_ratio=0.05,  # Warmup 비율 감소
+        warmup_ratio=0.1,  # Warmup 비율 감소
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         report_to="none",
-        gradient_checkpointing=False,  # 체크포인팅 비활성화
+        gradient_checkpointing=True,  # 체크포인팅 비활성화
         optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
     )
     

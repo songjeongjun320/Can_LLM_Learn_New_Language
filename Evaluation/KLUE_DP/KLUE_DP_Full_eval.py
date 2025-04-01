@@ -45,38 +45,44 @@ logger.info(f"Total number of KLUE-DP labels: {NUM_LABELS}")
 
 # Model configuration class (from first code)
 class ModelConfig:
-    def __init__(self, name, model_path, output_dir):
+    def __init__(self, name, model_path, output_dir, is_local):
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
+        self.is_local = is_local
 
 # Model configurations (from first code)
 MODEL_CONFIGS = [
     # ModelConfig(
     #     name="full-OLMo-1b-org", 
     #     model_path="allenai/OLMo-1B", 
-    #     output_dir="klue_dp_results/full-olmo1B-org-klue-dp"
+    #     output_dir="klue_dp_results/full-olmo1B-org-klue-dp",
+    #     is_local=False
     # ),
     ModelConfig(
-        name="full-OLMo-1b-v12", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12", 
-        output_dir="klue_dp_results/full-olmo1B-v12-klue-dp"
+        name="full-OLMo-1b", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+        output_dir="klue_dp_results/full-olmo1B-v12-klue-dp",
+        is_local=True
     ),
     # ModelConfig(
     #     name="full-OLMo-7b-org", 
     #     model_path="allenai/OLMo-7B", 
-    #     output_dir="klue_dp_results/full-olmo7B-org-klue-dp"
+    #     output_dir="klue_dp_results/full-olmo7B-org-klue-dp",
+    #     is_local=False
     # ),
     ModelConfig(
-        name="full-OLMo-7b-v13", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
-        output_dir="klue_dp_results/full-olmo7B-v13-klue-dp"
+        name="full-OLMo-7b", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+        output_dir="klue_dp_results/full-olmo7B-v13-klue-dp",
+        is_local=True
     ),
-    # ModelConfig(
-    #     name="full-Llama-3.2:3B", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-    #     output_dir="klue_dp_results/full-llama3.2-3b-klue-dp"
-    # )
+    ModelConfig(
+        name="full-Llama-3.2:3B", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+        output_dir="klue_dp_results/full-llama3.2-3b-klue-dp",
+        is_local=True
+    )
 ]
 
 # Configuration parameters
@@ -163,27 +169,33 @@ def prepare_dataset_json():
 
 # Model and tokenizer loading function (from first code)
 def load_model_and_tokenizer(model_config):
-    """Load model and tokenizer based on model configuration."""
-    logger.info(f"Loading model: {model_config.model_path}")
-    
+    """모델 설정에 따라 모델과 토크나이저를 로드합니다."""
+    logger.info(f"Load model: {model_config.model_path}")
+
+    is_local=False
+    if (model_config.is_local):
+        is_local = True
+
+    # 일반적인 HuggingFace 모델 로드 (OLMo 1B, OLMo 7B)
     tokenizer = AutoTokenizer.from_pretrained(
         model_config.model_path, 
+        local_files_only=is_local,
         trust_remote_code=True
-    )
+        )
     
+    # 특수 토큰 확인 및 설정
     if tokenizer.pad_token is None:
-        logger.info("Setting pad_token to eos_token")
         tokenizer.pad_token = tokenizer.eos_token
     
-    logger.info(f"Loading model with bfloat16 precision...")
+    # bfloat16 정밀도로 모델 로드 (메모리 효율성 증가)
     model = AutoModelForCausalLM.from_pretrained(
         model_config.model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
-        trust_remote_code=True
+        device_map="auto",  # 자동으로 GPU에 모델 분산
+        local_files_only=is_local,
+        trust_remote_code=True  # OLMo 모델에 필요
     )
     
-    logger.info(f"Model loaded successfully: {model_config.name}")
     return model, tokenizer
 
 # Custom Dataset for KLUE-DP
@@ -383,9 +395,9 @@ def train_model(model_config):
         evaluation_strategy="steps",
         eval_steps=200,
         learning_rate=2e-5,
-        per_device_train_batch_size=8,  # 배치 크기 증가
-        per_device_eval_batch_size=8,  # 배치 크기 증가
-        gradient_accumulation_steps=2,  # 축적 단계 감소
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        gradient_accumulation_steps=2,
         num_train_epochs=5,
         weight_decay=0.01,
         save_total_limit=3,
@@ -393,16 +405,16 @@ def train_model(model_config):
         save_steps=400,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
-        fp16=True,  # FP16으로 전환
-        bf16=False,  # BF16 비활성화
+        fp16=False,
+        bf16=True,  # Use bfloat16 precision
         lr_scheduler_type="cosine",
-        warmup_ratio=0.05,  # Warmup 비율 감소
+        warmup_ratio=0.1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         report_to="none",
-        gradient_checkpointing=False,  # 체크포인팅 비활성화
-        optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
-    )
+        gradient_checkpointing=True,  # Enable gradient checkpointing for memory efficiency
+        optim="adamw_torch",
+        )
     
     # Early stopping callback
     early_stopping_callback = EarlyStoppingCallback(
