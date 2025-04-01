@@ -20,6 +20,8 @@ Fine_Tuned_Results/
 .ipynb_checkpoints/
 DB/
 llama3.2_3b/
+klue_sts_results/
+klue_dp_results/
 
 *.zip
 *.pdf
