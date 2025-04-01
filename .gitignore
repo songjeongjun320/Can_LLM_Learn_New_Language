@@ -23,6 +23,7 @@ llama3.2_3b/
 klue_sts_results/
 klue_dp_results/
 
+*.log
 *.zip
 *.pdf
 *.suo
