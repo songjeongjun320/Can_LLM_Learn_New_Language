@@ -81,11 +81,7 @@ MAX_LENGTH = 512
 MAX_EVAL_SAMPLES = 200
 
 def prepare_dataset_json():
-    """이미 저장된 JSON 파일에서 KLUE STS 데이터셋을 불러와서 전처리한 후, 통합 JSON 파일로 저장합니다."""
-    if os.path.exists(JSON_DATASET_PATH):
-        logger.info(f"Dataset already exists: {JSON_DATASET_PATH}")
-        return
-
+    """이미 저장된 JSON 파일에서 KLUE STS 데이터셋을 불러와서 전처리한 후, 각각의 원래 경로에 재저장합니다."""
     # JSON 파일 존재 여부 확인 및 불러오기
     if not os.path.exists(JSON_TRAIN_DATASET_PATH):
         logger.error(f"Train dataset file does not exist: {JSON_TRAIN_DATASET_PATH}")
@@ -139,16 +135,18 @@ def prepare_dataset_json():
         }
         val_samples.append(sample)
 
-    dataset = {
-        "train": train_samples,
-        "validation": val_samples
-    }
+    # 학습 데이터 재저장
+    logger.info(f"Saving processed train dataset... (train: {len(train_samples)})")
+    with open(JSON_TRAIN_DATASET_PATH, "w", encoding="utf-8") as f:
+        json.dump(train_samples, f, ensure_ascii=False, indent=2)
 
-    logger.info(f"Saving combined JSON dataset... (train: {len(train_samples)}, valid: {len(val_samples)})")
-    with open(JSON_DATASET_PATH, "w", encoding="utf-8") as f:
-        json.dump(dataset, f, ensure_ascii=False, indent=2)
+    # 검증 데이터 재저장
+    logger.info(f"Saving processed validation dataset... (valid: {len(val_samples)})")
+    with open(JSON_VAL_DATASET_PATH, "w", encoding="utf-8") as f:
+        json.dump(val_samples, f, ensure_ascii=False, indent=2)
 
-    logger.info(f"Created klue_sts dataset: {JSON_DATASET_PATH}")
+    logger.info(f"Processed and saved train dataset: {JSON_TRAIN_DATASET_PATH}")
+    logger.info(f"Processed and saved validation dataset: {JSON_VAL_DATASET_PATH}")
 
 # Model and tokenizer loading function
 def load_model_and_tokenizer(model_config):
@@ -184,15 +182,16 @@ def load_model_and_tokenizer(model_config):
 # 메인 학습 함수
 def train_model(model_config):
     # 데이터셋 준비
-    prepare_dataset_json()
+    # prepare_dataset_json()
     
     # 데이터셋 로드
-    logger.info("JSON loading...")
-    with open(JSON_DATASET_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    
-    train_data = data["train"]
-    val_data = data["validation"]
+    logger.info("Loading train dataset from JSON...")
+    with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
+        train_data = json.load(f)
+
+    logger.info("Loading validation dataset from JSON...")
+    with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
+        val_data = json.load(f)
     
     logger.info(f"train data: {len(train_data)}, valid data: {len(val_data)}")
     
@@ -206,7 +205,7 @@ def train_model(model_config):
         "text": [f"{item['input']}{item['output']}" for item in val_data]
     })
     
-    target_module = ["att_proj", "attn_out"]
+    target_module = ["q_proj", "k_proj"]
     if (model_config.name == "full-Llama-3.2:3B"):
         targe_module = ["q_proj", "k_proj"]
 
