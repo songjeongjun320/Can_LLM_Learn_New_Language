@@ -53,30 +53,30 @@ class ModelConfig:
 # Model configurations (from first code)
 MODEL_CONFIGS = [
     # ModelConfig(
-    #     name="full-OLMo-7b-org", 
-    #     model_path="allenai/OLMo-7B", 
-    #     output_dir="klue_dp_results/full-olmo7B-org-klue-dp"
+    #     name="full-OLMo-1b-org", 
+    #     model_path="allenai/OLMo-1B", 
+    #     output_dir="klue_dp_results/full-olmo1B-org-klue-dp"
     # ),
-    ModelConfig(
-        name="full-OLMo-1b-org", 
-        model_path="allenai/OLMo-1B", 
-        output_dir="klue_dp_results/full-olmo1B-org-klue-dp"
-    ),
     ModelConfig(
         name="full-OLMo-1b-v12", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12", 
         output_dir="klue_dp_results/full-olmo1B-v12-klue-dp"
     ),
+    # ModelConfig(
+    #     name="full-OLMo-7b-org", 
+    #     model_path="allenai/OLMo-7B", 
+    #     output_dir="klue_dp_results/full-olmo7B-org-klue-dp"
+    # ),
     ModelConfig(
         name="full-OLMo-7b-v13", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
         output_dir="klue_dp_results/full-olmo7B-v13-klue-dp"
     ),
-    ModelConfig(
-        name="full-Llama-3.2:3B", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_dp_results/full-llama3.2-3b-klue-dp"
-    )
+    # ModelConfig(
+    #     name="full-Llama-3.2:3B", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+    #     output_dir="klue_dp_results/full-llama3.2-3b-klue-dp"
+    # )
 ]
 
 # Configuration parameters
