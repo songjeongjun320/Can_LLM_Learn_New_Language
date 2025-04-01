@@ -19,8 +19,14 @@ klue_sts_results/
 Fine_Tuned_Results/
 .ipynb_checkpoints/
 DB/
+
 downloaded_models/
 KR_ENG_Dataset_Refined/
+
+llama3.2_3b/
+klue_sts_results/
+klue_dp_results/
+
 
 # Result folders
 klue_sts_results/
