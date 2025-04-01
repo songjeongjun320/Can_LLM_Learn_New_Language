@@ -225,9 +225,9 @@ def train_model(model_config):
         evaluation_strategy="steps",
         eval_steps=200,
         learning_rate=2e-5,
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=4,
-        gradient_accumulation_steps=4,
+        per_device_train_batch_size=8,  # 배치 크기 증가
+        per_device_eval_batch_size=8,  # 배치 크기 증가
+        gradient_accumulation_steps=2,  # 축적 단계 감소
         num_train_epochs=5,
         weight_decay=0.01,
         save_total_limit=3,
@@ -235,14 +235,15 @@ def train_model(model_config):
         save_steps=400,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
-        bf16=True,
+        fp16=True,  # FP16으로 전환
+        bf16=False,  # BF16 비활성화
         lr_scheduler_type="cosine",
-        warmup_ratio=0.1,
+        warmup_ratio=0.05,  # Warmup 비율 감소
         load_best_model_at_end=True,
-        metric_for_best_model="eval_f1",
+        metric_for_best_model="eval_loss",
         report_to="none",
-        gradient_checkpointing=True,
-        optim="adamw_torch",
+        gradient_checkpointing=False,  # 체크포인팅 비활성화
+        optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
     )
     
     # Compute metrics function

@@ -126,3 +126,133 @@ Invalid credentials in Authorization header
 2025-03-31 22:28:43,855 - __main__ - INFO - Initializing trainer
 2025-03-31 22:28:44,130 - accelerate.utils.other - WARNING - Detected kernel version 4.18.0, which is below the recommended minimum of 5.5.0; this can cause the process to hang. It is recommended to upgrade the kernel to the minimum version or higher.
 2025-03-31 22:28:44,135 - __main__ - INFO - Starting training
+2025-03-31 23:04:40,477 - __main__ - INFO - Saving final model to: klue_dp_results/full-olmo1B-org-klue-dp/final
+2025-03-31 23:04:43,747 - __main__ - INFO - Training completed for full-OLMo-1b-org
+2025-03-31 23:04:43,766 - __main__ - INFO - Evaluating model: full-OLMo-1b-org
+2025-03-31 23:19:31,201 - __main__ - INFO - Evaluation results for full-OLMo-1b-org:
+2025-03-31 23:19:31,216 - __main__ - INFO - UAS: 0.4708
+2025-03-31 23:19:31,216 - __main__ - INFO - LAS: 0.4505
+2025-03-31 23:19:31,217 - __main__ - INFO - Total tokens evaluated: 3052
+2025-03-31 23:19:31,306 - __main__ - INFO - Evaluation logs saved to: klue_dp_results/full-olmo1B-org-klue-dp/evaluation_log.json
+2025-03-31 23:19:31,306 - __main__ - INFO - Evaluation results saved to: klue_dp_results/full-olmo1B-org-klue-dp/eval_results.json
+2025-03-31 23:19:31,309 - __main__ - INFO - Completed processing for full-OLMo-1b-org
+2025-03-31 23:19:31,310 - __main__ - INFO - Processing model: full-OLMo-1b-v12
+2025-03-31 23:19:31,312 - __main__ - INFO - Starting training for full-OLMo-1b-v12
+2025-03-31 23:19:31,313 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-03-31 23:19:31,313 - __main__ - INFO - Loading model: /scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12
+2025-03-31 23:19:31,314 - __main__ - INFO - Model is local: False
+2025-03-31 23:19:31,315 - __main__ - ERROR - Error processing full-OLMo-1b-v12: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12'. Use `repo_type` argument if needed.
+2025-03-31 23:19:31,315 - __main__ - ERROR - Exception details:
+Traceback (most recent call last):
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 424, in cached_files
+    hf_hub_download(
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12'. Use `repo_type` argument if needed.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 601, in <module>
+    model, tokenizer = train_model(model_config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 373, in train_model
+    model, tokenizer = load_model_and_tokenizer(model_config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 173, in load_model_and_tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/models/auto/tokenization_auto.py", line 910, in from_pretrained
+    tokenizer_config = get_tokenizer_config(pretrained_model_name_or_path, **kwargs)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/models/auto/tokenization_auto.py", line 742, in get_tokenizer_config
+    resolved_config_file = cached_file(
+                           ^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 266, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 470, in cached_files
+    resolved_files = [
+                     ^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 471, in <listcomp>
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision) for filename in full_filenames
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 134, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(path_or_repo_id, full_filename, cache_dir=cache_dir, revision=revision)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12'. Use `repo_type` argument if needed.
+2025-03-31 23:19:31,498 - __main__ - INFO - Processing model: full-OLMo-7b-v13
+2025-03-31 23:19:31,500 - __main__ - INFO - Starting training for full-OLMo-7b-v13
+2025-03-31 23:19:31,501 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-03-31 23:19:31,501 - __main__ - INFO - Loading model: /scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13
+2025-03-31 23:19:31,502 - __main__ - INFO - Model is local: False
+2025-03-31 23:19:31,504 - __main__ - ERROR - Error processing full-OLMo-7b-v13: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13'. Use `repo_type` argument if needed.
+2025-03-31 23:19:31,504 - __main__ - ERROR - Exception details:
+Traceback (most recent call last):
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 424, in cached_files
+    hf_hub_download(
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13'. Use `repo_type` argument if needed.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 601, in <module>
+    model, tokenizer = train_model(model_config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 373, in train_model
+    model, tokenizer = load_model_and_tokenizer(model_config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 173, in load_model_and_tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/models/auto/tokenization_auto.py", line 910, in from_pretrained
+    tokenizer_config = get_tokenizer_config(pretrained_model_name_or_path, **kwargs)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/models/auto/tokenization_auto.py", line 742, in get_tokenizer_config
+    resolved_config_file = cached_file(
+                           ^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 266, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 470, in cached_files
+    resolved_files = [
+                     ^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 471, in <listcomp>
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision) for filename in full_filenames
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 134, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(path_or_repo_id, full_filename, cache_dir=cache_dir, revision=revision)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13'. Use `repo_type` argument if needed.
+2025-03-31 23:19:31,510 - __main__ - INFO - Processing model: full-Llama-3.2:3B
+2025-03-31 23:19:31,511 - __main__ - INFO - Starting training for full-Llama-3.2:3B
+2025-03-31 23:19:31,512 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-03-31 23:19:31,512 - __main__ - INFO - Loading model: /scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b
+2025-03-31 23:19:31,513 - __main__ - INFO - Model is local: True
+2025-03-31 23:19:31,996 - __main__ - INFO - Setting pad_token to eos_token
+2025-03-31 23:19:31,996 - __main__ - INFO - Loading model with bfloat16 precision...
+2025-03-31 23:19:32,384 - accelerate.utils.modeling - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+2025-03-31 23:19:40,354 - __main__ - INFO - Model loaded successfully: full-Llama-3.2:3B
+2025-03-31 23:19:40,354 - __main__ - INFO - Loading train and validation datasets
+2025-03-31 23:19:40,355 - __main__ - INFO - Loading DP dataset from /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json
+2025-03-31 23:19:40,803 - __main__ - INFO - Loaded 10000 samples for dependency parsing
+2025-03-31 23:19:40,804 - __main__ - INFO - Loading DP dataset from /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-03-31 23:19:40,861 - __main__ - INFO - Loaded 2000 samples for dependency parsing
+2025-03-31 23:19:40,867 - __main__ - INFO - Train dataset size: 10000, Validation dataset size: 2000
+2025-03-31 23:19:40,933 - __main__ - INFO - Initializing trainer
+2025-03-31 23:19:40,979 - accelerate.utils.other - WARNING - Detected kernel version 4.18.0, which is below the recommended minimum of 5.5.0; this can cause the process to hang. It is recommended to upgrade the kernel to the minimum version or higher.
+2025-03-31 23:19:40,986 - __main__ - INFO - Starting training
