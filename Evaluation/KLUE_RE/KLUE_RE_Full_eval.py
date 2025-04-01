@@ -109,37 +109,23 @@ MAX_EVAL_SAMPLES = 200
 def load_model_and_tokenizer(model_config):
     """Load model and tokenizer based on model configuration."""
     logger.info(f"Loading model: {model_config.model_path}")
-
-    is_local = os.path.exists(model_config.model_path)
-    logger.info(f"Model is local: {is_local}")
     
     tokenizer = AutoTokenizer.from_pretrained(
         model_config.model_path, 
-        trust_remote_code=True,
-        local_files_only=is_local
+        trust_remote_code=True
     )
     
     if tokenizer.pad_token is None:
         logger.info("Setting pad_token to eos_token")
         tokenizer.pad_token = tokenizer.eos_token
     
-    # Add special tokens for entity markers
-    special_tokens = {"additional_special_tokens": ["[SUBJ]", "[/SUBJ]", "[OBJ]", "[/OBJ]"]}
-    tokenizer.add_special_tokens(special_tokens)
-    
-    logger.info(f"Loading model with bfloat16 precision for sequence classification...")
-    model = AutoModelForSequenceClassification.from_pretrained(
+    logger.info(f"Loading model with bfloat16 precision...")
+    model = AutoModelForCausalLM.from_pretrained(
         model_config.model_path,
-        num_labels=NUM_LABELS,
-        id2label=ID2LABEL,
-        label2id=LABEL2ID,
         torch_dtype=torch.bfloat16,
         device_map="auto",
         trust_remote_code=True
     )
-    
-    # Resize model embeddings to account for new special tokens
-    model.resize_token_embeddings(len(tokenizer))
     
     logger.info(f"Model loaded successfully: {model_config.name}")
     return model, tokenizer

@@ -165,29 +165,22 @@ def prepare_dataset_json():
 def load_model_and_tokenizer(model_config):
     """Load model and tokenizer based on model configuration."""
     logger.info(f"Loading model: {model_config.model_path}")
-
-    # Check if the model is a local path
-    is_local = os.path.exists(model_config.model_path)
-    logger.info(f"Model is local: {is_local}")
     
     tokenizer = AutoTokenizer.from_pretrained(
         model_config.model_path, 
-        trust_remote_code=True,
-        local_files_only=is_local
+        trust_remote_code=True
     )
     
-    # Set pad token if needed
     if tokenizer.pad_token is None:
         logger.info("Setting pad_token to eos_token")
         tokenizer.pad_token = tokenizer.eos_token
     
-    # Load model with bfloat16 precision for memory efficiency
     logger.info(f"Loading model with bfloat16 precision...")
     model = AutoModelForCausalLM.from_pretrained(
         model_config.model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",  # Automatically distribute model across GPUs
-        trust_remote_code=True  # Required for OLMo models
+        device_map="auto",
+        trust_remote_code=True
     )
     
     logger.info(f"Model loaded successfully: {model_config.name}")

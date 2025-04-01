@@ -173,24 +173,27 @@ def prepare_dataset_json():
 
 # 모델 및 토크나이저 로드 함수
 def load_model_and_tokenizer(model_config):
-    """모델 설정에 따라 모델과 토크나이저를 로드합니다."""
-    logger.info(f"Load model: {model_config.model_path}")
-
-    # 일반적인 HuggingFace 모델 로드 (OLMo 1B, OLMo 7B)
-    tokenizer = AutoTokenizer.from_pretrained(model_config.model_path, trust_remote_code=True)
+    """Load model and tokenizer based on model configuration."""
+    logger.info(f"Loading model: {model_config.model_path}")
     
-    # 특수 토큰 확인 및 설정
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_config.model_path, 
+        trust_remote_code=True
+    )
+    
     if tokenizer.pad_token is None:
+        logger.info("Setting pad_token to eos_token")
         tokenizer.pad_token = tokenizer.eos_token
     
-    # bfloat16 정밀도로 모델 로드 (메모리 효율성 증가)
+    logger.info(f"Loading model with bfloat16 precision...")
     model = AutoModelForCausalLM.from_pretrained(
         model_config.model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",  # 자동으로 GPU에 모델 분산
-        trust_remote_code=True  # OLMo 모델에 필요
+        device_map="auto",
+        trust_remote_code=True
     )
     
+    logger.info(f"Model loaded successfully: {model_config.name}")
     return model, tokenizer
 
 # 메인 학습 함수
