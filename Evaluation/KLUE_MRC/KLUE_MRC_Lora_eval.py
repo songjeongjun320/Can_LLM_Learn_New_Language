@@ -197,13 +197,12 @@ def train_model(model_config):
     full_train_data = MachineReadingComprehensionDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
 
     train_data, val_data = train_test_split(
-        full_train_data[:MAX_TRAIN_SAMPLES], 
+        full_train_data, 
         test_size=0.2,  # Val 20%
         random_state=42,  # 재현성 보장
         shuffle=True
     )
     logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
-        # Data collator for language modeling
 
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,

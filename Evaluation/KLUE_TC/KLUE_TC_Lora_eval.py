@@ -27,63 +27,41 @@ from transformers import (
     TrainingArguments
 )
 from trl import SFTTrainer, SFTConfig
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("klue_re_training.log")
+        logging.FileHandler("klue_tc_training.log")
     ]
 )
 logger = logging.getLogger(__name__)
 
-# KLUE RE Label Definitions (테이블에 맞게 수정)
-RE_LABELS = [
-    "no_relation",
-    "org:dissolved",
-    "org:place_of_headquarters",
-    "org:alternate_names",
-    "org:member_of",
-    "org:political/religious_affiliation",
-    "org:product",
-    "org:founded_by",
-    "org:top_members/employees",
-    "org:number_of_employees/members",
-    "per:date_of_birth",
-    "per:date_of_death",
-    "per:place_of_birth",
-    "per:place_of_death",
-    "per:place_of_residence",
-    "per:origin",
-    "per:employee_of",
-    "per:schools_attended",
-    "per:alternate_names",
-    "per:parents",
-    "per:children",
-    "per:siblings",
-    "per:spouse",
-    "per:other_family",
-    "per:colleagues",
-    "per:product",
-    "per:religion",
-    "per:title"
+# KLUE TC Label Definitions
+TC_LABELS = [
+    "IT/과학",  # 0
+    "경제",     # 1
+    "사회",     # 2
+    "생활/문화", # 3
+    "세계",     # 4
+    "스포츠",    # 5
+    "정치"      # 6
 ]
-NUM_LABELS = len(RE_LABELS)
-LABEL2ID = {label: idx for idx, label in enumerate(RE_LABELS)}  # 레이블 -> 인덱스
-ID2LABEL = {idx: label for idx, label in enumerate(RE_LABELS)}  # 인덱스 -> 레이블
-logger.info(f"Total number of KLUE-RE labels: {NUM_LABELS}")
-
+NUM_LABELS = len(TC_LABELS)
+LABEL2ID = {label: idx for idx, label in enumerate(TC_LABELS)}
+ID2LABEL = {idx: label for label, idx in enumerate(TC_LABELS)}
+logger.info(f"Total number of KLUE-TC labels: {NUM_LABELS}")
 
 # Model configuration class
 class ModelConfig:
-    def __init__(self, name, model_path, output_dir, is_local):
+    def __init__(self, name, model_path, output_dir):
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
-        self.is_local = is_local
 
-# Model configurations
+# Model configurations (주어진 MODEL_CONFIGS 사용)
 # 모델 설정들 (기본 OLMo 1B, OLMo 7B)
 MODEL_CONFIGS = [
     ModelConfig(
@@ -119,9 +97,9 @@ MODEL_CONFIGS = [
 ]
 
 # Configuration parameters
-DATA_CACHE_DIR = "./klue_re_cache"
-JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_re_train.json"
-JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_re_validation.json"
+DATA_CACHE_DIR = "./klue_tc_cache"
+JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_tc_train.json"
+JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_tc_validation.json"
 MAX_LENGTH = 512
 MAX_EVAL_SAMPLES = 200
 
@@ -146,25 +124,25 @@ def load_model_and_tokenizer(model_config):
         tokenizer.pad_token = tokenizer.eos_token
     
     # bfloat16 정밀도로 모델 로드 (메모리 효율성 증가)
-    model = AutoModelForSequenceClassification.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         model_config.model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
+        device_map="auto",  # 자동으로 GPU에 모델 분산
         local_files_only=is_local,
-        trust_remote_code=True
+        trust_remote_code=True  # OLMo 모델에 필요
     )
     
     return model, tokenizer
 
-# Custom Dataset for KLUE-RE
-class REDataset(Dataset):
+# Custom Dataset for KLUE-TC
+class TCDataset(Dataset):
     def __init__(self, data_path, tokenizer, max_length=MAX_LENGTH):
-        logger.info(f"Loading RE dataset from {data_path}")
+        logger.info(f"Loading TC dataset from {data_path}")
         with open(data_path, "r", encoding="utf-8") as f:
             self.data = json.load(f)
         self.tokenizer = tokenizer
         self.max_length = max_length
-        logger.info(f"Loaded {len(self.data)} samples for RE")
+        logger.info(f"Loaded {len(self.data)} samples for TC")
         
     def __len__(self):
         return len(self.data)
@@ -172,37 +150,12 @@ class REDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         
-        sentence = item["sentence"]
-        subject_entity = item["subject_entity"]
-        object_entity = item["object_entity"]
+        title = item["title"]
         label = item["label"]
         
-        # Add entity markers to the sentence
-        # Ensure correct ordering of entities based on their positions
-        sub_start, sub_end = subject_entity["start_idx"], subject_entity["end_idx"]
-        obj_start, obj_end = object_entity["start_idx"], object_entity["end_idx"]
-        
-        # Split the sentence into parts and insert markers
-        if sub_start < obj_start:
-            marked_sentence = (
-                sentence[:sub_start] +
-                "[SUBJ]" + sentence[sub_start:sub_end + 1] + "[/SUBJ]" +
-                sentence[sub_end + 1:obj_start] +
-                "[OBJ]" + sentence[obj_start:obj_end + 1] + "[/OBJ]" +
-                sentence[obj_end + 1:]
-            )
-        else:
-            marked_sentence = (
-                sentence[:obj_start] +
-                "[OBJ]" + sentence[obj_start:obj_end + 1] + "[/OBJ]" +
-                sentence[obj_end + 1:sub_start] +
-                "[SUBJ]" + sentence[sub_start:sub_end + 1] + "[/SUBJ]" +
-                sentence[sub_end + 1:]
-            )
-        
-        # Tokenize the marked sentence
+        # Tokenize the title
         encoding = self.tokenizer(
-            marked_sentence,
+            title,
             truncation=True,
             max_length=self.max_length,
             padding="max_length",
@@ -217,22 +170,7 @@ class REDataset(Dataset):
 
 # Training function
 def train_model(model_config):
-    # Compute metrics function
-    def compute_metrics(p):
-        predictions, labels = p
-        predictions = np.argmax(predictions, axis=1)
-        
-        accuracy = accuracy_score(labels, predictions)
-        precision, recall, f1, _ = precision_recall_f1_support(labels, predictions, average="macro", zero_division=0)
-        
-        return {
-            "accuracy": accuracy,
-            "precision": precision,
-            "recall": recall,
-            "f1": f1
-        }
-
-    """Train the model for RE using sequence classification approach."""
+    """Train the model for TC using sequence classification approach."""
     logger.info(f"Starting training for {model_config.name}")
     
     os.makedirs(model_config.output_dir, exist_ok=True)
@@ -242,7 +180,7 @@ def train_model(model_config):
     model, tokenizer = load_model_and_tokenizer(model_config)
     
     # Load datasets
-    full_train_data = REDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
+    full_train_data = TCDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
     train_data, val_data = train_test_split(
         full_train_data, 
         test_size=0.2,  # Val 20%
@@ -250,11 +188,11 @@ def train_model(model_config):
         shuffle=True
     )
     logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
-
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm=False
     )
+    
     # LoRA 설정 추가
     peft_params = LoraConfig(
         lora_alpha=16,  # LoRA 스케일링 팩터
@@ -278,6 +216,7 @@ def train_model(model_config):
     model = get_peft_model(model, peft_params)
     model.print_trainable_parameters()
 
+    # Training arguments
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
         evaluation_strategy="steps",
@@ -304,6 +243,20 @@ def train_model(model_config):
         optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
     )
 
+    def compute_metrics(p):
+        predictions, labels = p
+        predictions = np.argmax(predictions, axis=1)
+        
+        accuracy = accuracy_score(labels, predictions)
+        precision, recall, f1, _ = precision_recall_f1_support(labels, predictions, average="macro", zero_division=0)
+        
+        return {
+            "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1
+        }
+
     # SFTTrainer 초기화 시 tokenizer와 packing 제거
     logger.info("Setting up SFTTrainer...")
     trainer = SFTTrainer(
@@ -312,6 +265,7 @@ def train_model(model_config):
         train_dataset=train_dataset,
         data_collator=data_collator,
         eval_dataset=val_dataset,
+        compute_metrics=compute_metrics,
         peft_config=peft_params,
     )
 
@@ -329,10 +283,10 @@ def train_model(model_config):
     
     logger.info("Fine-tuning completed!")
     return model, tokenizer
-    
+
 # Evaluation function
 def evaluate_model(model, tokenizer, model_config):
-    """Evaluate the model on KLUE-RE metrics."""
+    """Evaluate the model on KLUE-TC metrics."""
     logger.info(f"Evaluating model: {model_config.name}")
     
     with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
@@ -348,35 +302,12 @@ def evaluate_model(model, tokenizer, model_config):
     logs = []
     
     for item in tqdm(val_subset, desc="Evaluating"):
-        sentence = item["sentence"]
-        subject_entity = item["subject_entity"]
-        object_entity = item["object_entity"]
+        title = item["title"]
         gold_label = item["label"]
-        
-        # Add entity markers to the sentence
-        sub_start, sub_end = subject_entity["start_idx"], subject_entity["end_idx"]
-        obj_start, obj_end = object_entity["start_idx"], object_entity["end_idx"]
-        
-        if sub_start < obj_start:
-            marked_sentence = (
-                sentence[:sub_start] +
-                "[SUBJ]" + sentence[sub_start:sub_end + 1] + "[/SUBJ]" +
-                sentence[sub_end + 1:obj_start] +
-                "[OBJ]" + sentence[obj_start:obj_end + 1] + "[/OBJ]" +
-                sentence[obj_end + 1:]
-            )
-        else:
-            marked_sentence = (
-                sentence[:obj_start] +
-                "[OBJ]" + sentence[obj_start:obj_end + 1] + "[/OBJ]" +
-                sentence[obj_end + 1:sub_start] +
-                "[SUBJ]" + sentence[sub_start:sub_end + 1] + "[/SUBJ]" +
-                sentence[sub_end + 1:]
-            )
         
         # Tokenize
         encoding = tokenizer(
-            marked_sentence,
+            title,
             truncation=True,
             max_length=MAX_LENGTH,
             padding="max_length",
@@ -395,9 +326,7 @@ def evaluate_model(model, tokenizer, model_config):
         
         # Log details
         logs.append({
-            "sentence": sentence,
-            "subject_entity": subject_entity["word"],
-            "object_entity": object_entity["word"],
+            "title": title,
             "gold_label": ID2LABEL[gold_label],
             "pred_label": ID2LABEL[prediction]
         })
@@ -448,7 +377,7 @@ def evaluate_model(model, tokenizer, model_config):
 
 # Main execution
 if __name__ == "__main__":
-    logger.info("Starting KLUE-RE training and evaluation")
+    logger.info("Starting KLUE-TC training and evaluation")
     
     all_results = {}
     
@@ -472,11 +401,11 @@ if __name__ == "__main__":
             logger.exception("Exception details:")
     
     # Save combined results
-    combined_results_path = "klue_re_results/combined_results.json"
+    combined_results_path = "klue_tc_results/combined_results.json"
     os.makedirs(os.path.dirname(combined_results_path), exist_ok=True)
     
     with open(combined_results_path, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
         
     logger.info(f"All results saved to: {combined_results_path}")
-    logger.info("KLUE-RE training and evaluation completed")
+    logger.info("KLUE-TC training and evaluation completed")

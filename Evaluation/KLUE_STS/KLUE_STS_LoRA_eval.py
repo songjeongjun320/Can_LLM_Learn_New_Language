@@ -187,13 +187,15 @@ def train_model(model_config):
     # 데이터셋 로드
     logger.info("Loading train dataset from JSON...")
     with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
-        train_data = json.load(f)
-
-    logger.info("Loading validation dataset from JSON...")
-    with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
-        val_data = json.load(f)
+        full_train_data = json.load(f)
     
-    logger.info(f"train data: {len(train_data)}, valid data: {len(val_data)}")
+    train_data, val_data = train_test_split(
+        full_train_data, 
+        test_size=0.2,  # Val 20%
+        random_state=42,  # 재현성 보장
+        shuffle=True
+    )
+    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
     
     # 모델 및 토크나이저 로드
     model, tokenizer = load_model_and_tokenizer(model_config)
@@ -204,7 +206,12 @@ def train_model(model_config):
     val_dataset = Dataset.from_dict({
         "text": [f"{item['input']}{item['output']}" for item in val_data]
     })
-    
+
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False
+    )
+
     # LoRA 설정 추가
     peft_params = LoraConfig(
         lora_alpha=16,  # LoRA 스케일링 팩터
@@ -260,6 +267,7 @@ def train_model(model_config):
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        data_collator=data_collator,
         eval_dataset=val_dataset,
         peft_config=peft_params,
     )

@@ -167,10 +167,18 @@ def train_model(model_config):
     model, tokenizer = load_model_and_tokenizer(model_config)
     
     # Load datasets
-    train_dataset = TCDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    val_dataset = TCDataset(JSON_VAL_DATASET_PATH, tokenizer)
-    logger.info(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
-    
+    full_train_data = TCDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
+    train_data, val_data = train_test_split(
+        full_train_data, 
+        test_size=0.2,  # Val 20%
+        random_state=42,  # 재현성 보장
+        shuffle=True
+    )
+    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False
+    )
     # Training arguments
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
@@ -218,6 +226,7 @@ def train_model(model_config):
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        data_collator=data_collator,
         eval_dataset=val_dataset,
         compute_metrics=compute_metrics,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],

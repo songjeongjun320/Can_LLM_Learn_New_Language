@@ -210,7 +210,7 @@ def train_model(model_config):
         full_train_data = json.load(f)  # 전체 훈련 데이터
 
     train_data, val_data = train_test_split(
-        full_train_data[:MAX_TRAIN_SAMPLES], 
+        full_train_data, 
         test_size=0.2,  # Val 20%
         random_state=42,  # 재현성 보장
         shuffle=True

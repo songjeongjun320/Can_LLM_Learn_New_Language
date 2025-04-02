@@ -204,74 +204,50 @@ def load_model_and_tokenizer(model_config):
 
 # 메인 학습 함수
 def train_model(model_config):
-    # 데이터셋 준비
-    prepare_dataset_json()
+    # Compute metrics function
+    def compute_metrics(p):
+        predictions, labels = p
+        predictions = np.argmax(predictions, axis=1)
+        
+        accuracy = accuracy_score(labels, predictions)
+        precision, recall, f1, _ = precision_recall_f1_support(labels, predictions, average="macro", zero_division=0)
+        
+        return {
+            "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1
+        }
+
+    """Train the model for RE using sequence classification approach."""
+    logger.info(f"Starting training for {model_config.name}")
     
-    # 데이터셋 로드
-    logger.info("JSON loading...")
-    with open(JSON_DATASET_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    os.makedirs(model_config.output_dir, exist_ok=True)
+    os.makedirs(DATA_CACHE_DIR, exist_ok=True)
     
-    train_data = data["train"]
-    val_data = data["validation"]
+    # Load model and tokenizer
+    model, tokenizer = load_model_and_tokenizer(model_config)
     
-    logger.info(f"train data: {len(train_data)}, valid data: {len(val_data)}")
-    
+    # Load datasets
+    full_train_data = REDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
+    train_data, val_data = train_test_split(
+        full_train_data, 
+        test_size=0.2,  # Val 20%
+        random_state=42,  # 재현성 보장
+        shuffle=True
+    )
+    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
+
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False
+    )
     # 모델 및 토크나이저 로드
     model, tokenizer = load_model_and_tokenizer(model_config)
     
     # 학습용 데이터셋 생성
     from torch.utils.data import Dataset
-    
-    class SimpleDataset(Dataset):
-        def __init__(self, data, tokenizer, max_length):
-            self.data = data
-            self.tokenizer = tokenizer
-            self.max_length = max_length
-        
-        def __len__(self):
-            return len(self.data)
-        
-        def __getitem__(self, idx):
-            item = self.data[idx]
-            prompt = item["input"]
-            completion = item["output"]
-            
-            # 프롬프트와 완성 결합
-            full_text = prompt + completion
-            
-            # 토큰화
-            encoded = self.tokenizer(
-                full_text,
-                truncation=True,
-                max_length=self.max_length,
-                padding="max_length",
-                return_tensors="pt"
-            )
-            
-            # 프롬프트 부분 토큰화 (라벨 마스킹용)
-            prompt_encoded = self.tokenizer(
-                prompt,
-                truncation=True,
-                max_length=self.max_length,
-                return_tensors="pt"
-            )
-            
-            # 라벨 생성: 프롬프트 부분은 -100으로 마스킹
-            labels = encoded["input_ids"].clone().squeeze(0)
-            prompt_length = prompt_encoded["input_ids"].shape[1]
-            labels[:prompt_length] = -100
-            
-            return {
-                "input_ids": encoded["input_ids"].squeeze(0),
-                "attention_mask": encoded["attention_mask"].squeeze(0),
-                "labels": labels
-            }
-    
-    # 데이터셋 생성
-    train_dataset = SimpleDataset(train_data, tokenizer, MAX_LENGTH)
-    val_dataset = SimpleDataset(val_data, tokenizer, MAX_LENGTH)
-    
+
     # 데이터 콜레이터
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
