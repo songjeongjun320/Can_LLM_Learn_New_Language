@@ -82,20 +82,20 @@ MODEL_CONFIGS = [
     #     output_dir="klue_ner_results/lora-olmo1B-Tuned-klue-ner",
     #     is_local=True
     # ),
-    ModelConfig(
-        name="lora-OLMo-7b-org", 
-        model_path="allenai/OLMo-7B", 
-        output_dir="klue_ner_results/lora-olmo7B-org-klue-ner",
-        is_local=False
-    ),
-    ModelConfig(
-        name="lora-OLMo-7b-Tuned", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_ner_results/lora-olmo7B-Tuned-klue-ner",
-        is_local=True
-    ),
+    # ModelConfig(
+    #     name="lora-OLMo-7b-org", 
+    #     model_path="allenai/OLMo-7B", 
+    #     output_dir="klue_ner_results/lora-olmo7B-org-klue-ner",
+    #     is_local=False
+    # ),
+    # ModelConfig(
+    #     name="lora-OLMo-7b-Tuned", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+    #     output_dir="klue_ner_results/lora-olmo7B-Tuned-klue-ner",
+    #     is_local=True
+    # ),
         ModelConfig(
-        name="lora-Llama-3.2:3B", 
+        name="lora-Llama-3.2-3b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
         output_dir="klue_ner_results/lora-llama3.2-3b-klue-ner",
         is_local=True
@@ -241,7 +241,7 @@ def train_model(model_config):
         task_type="CAUSAL_LM",
         target_modules=["att_proj", "attn_out"]
     )    
-    if (model_config.name == "full-Llama-3.2:3B"):
+    if (model_config.name == "lora-Llama-3.2-3b"):
         peft_params = LoraConfig(
             lora_alpha=16,  # LoRA 스케일링 팩터
             lora_dropout=0.1,  # LoRA 드롭아웃 비율
@@ -260,9 +260,9 @@ def train_model(model_config):
         evaluation_strategy="steps",
         eval_steps=200,
         learning_rate=2e-5,
-        per_device_train_batch_size=16,  # 배치 크기 증가
-        per_device_eval_batch_size=16,  # 배치 크기 증가
-        gradient_accumulation_steps=2,  # 축적 단계 감소
+        per_device_train_batch_size=4,  # 배치 크기 증가
+        per_device_eval_batch_size=4,  # 배치 크기 증가
+        gradient_accumulation_steps=4,  # 축적 단계 감소
         num_train_epochs=3,
         weight_decay=0.01,
         save_total_limit=3,

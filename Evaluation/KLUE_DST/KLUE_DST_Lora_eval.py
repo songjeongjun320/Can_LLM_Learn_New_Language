@@ -44,34 +44,34 @@ class ModelConfig:
 
 # 모델 설정들 (기본 OLMo 1B, OLMo 7B)
 MODEL_CONFIGS = [
+    # ModelConfig(
+    #     name="lora-OLMo-1b-org", 
+    #     model_path="allenai/OLMo-1B", 
+    #     output_dir="klue_dst_results/lora-olmo1B-org-klue-dst",
+    #     is_local=False
+    # ),
     ModelConfig(
-        name="full-OLMo-1b-org", 
-        model_path="allenai/OLMo-1B", 
-        output_dir="klue_sts_results/full-olmo1B-org-klue-sts",
-        is_local=False
-    ),
-    ModelConfig(
-        name="full-OLMo-1b", 
+        name="lora-OLMo-1b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-        output_dir="klue_sts_results/full-olmo1B-v12-klue-sts",
+        output_dir="klue_dst_results/lora-olmo1B-v12-klue-dst",
         is_local=True
     ),
-    ModelConfig(
-        name="full-OLMo-7b-org", 
-        model_path="allenai/OLMo-7B", 
-        output_dir="klue_sts_results/full-olmo7B-org-klue-sts",
-        is_local=False
-    ),
-    ModelConfig(
-        name="full-OLMo-7b", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_sts_results/full-olmo7B-v13-klue-sts",
-        is_local=True
-    ),
+    # ModelConfig(
+    #     name="lora-OLMo-7b-org", 
+    #     model_path="allenai/OLMo-7B", 
+    #     output_dir="klue_dst_results/lora-olmo7B-org-klue-dst",
+    #     is_local=False
+    # ),
+    # ModelConfig(
+    #     name="lora-OLMo-7b", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+    #     output_dir="klue_dst_results/lora-olmo7B-v13-klue-dst",
+    #     is_local=True
+    # ),
         ModelConfig(
-        name="full-Llama-3.2:3B", 
+        name="lora-Llama-3.2:3B", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_sts_results/full-llama3.2-3b-klue-sts",
+        output_dir="klue_dst_results/lora-llama3.2-3b-klue-dst",
         is_local=True
     )
 ]
@@ -234,7 +234,7 @@ def train_model(model_config):
         task_type="CAUSAL_LM",
         target_modules=["att_proj", "attn_out"]  # OLMo 확인 후 조정
     )
-    if model_config.name == "full-Llama-3.2:3B":
+    if model_config.name == "lora-Llama-3.2:3B":
         peft_params = LoraConfig(
             lora_alpha=8,
             lora_dropout=0.05,
@@ -253,9 +253,9 @@ def train_model(model_config):
         evaluation_strategy="steps",
         eval_steps=300,
         learning_rate=3e-5,
-        per_device_train_batch_size=8,  # 배치 크기 증가
-        per_device_eval_batch_size=8,  # 배치 크기 증가
-        gradient_accumulation_steps=2,  # 축적 단계 감소
+        per_device_train_batch_size=4,  # 배치 크기 증가
+        per_device_eval_batch_size=4,  # 배치 크기 증가
+        gradient_accumulation_steps=4,  # 축적 단계 감소
         num_train_epochs=2,
         weight_decay=0.01,
         save_total_limit=3,
@@ -359,8 +359,10 @@ def calculate_slot_f1(true_states, pred_states):
 
 # 모델 평가 함수 (DST 태스크에 맞게 수정)
 def evaluate_model(model, tokenizer, model_config):
+    logger.info("====================================")
     logger.info(f"Evaluating the model: {model_config.name}")
-    
+    logger.info("====================================")
+
     # 검증 데이터 로드
     with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
         val_data = json.load(f)[:MAX_EVAL_SAMPLES]  # 평가 샘플 제한
@@ -474,8 +476,23 @@ if __name__ == "__main__":
         
         try:
             # 모델 학습
-            model, tokenizer = train_model(model_config)
+            # model, tokenizer = train_model(model_config)
             
+            ##########
+            # 1. 기본 모델과 토크나이저 로드
+            base_model, tokenizer = load_model_and_tokenizer(model_config)
+            
+            # 2. PEFT 모델 경로 설정
+            peft_model_path = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DST/klue_dst_results/lora-olmo1B-org-klue-dst/final"
+            
+            # 3. PEFT 모델 로드 (어댑터만 추가)
+            model = PeftModel.from_pretrained(
+                base_model,
+                peft_model_path,
+                torch_dtype=torch.bfloat16,
+                device_map="auto"
+            )
+            ###########
             # 모델 평가
             evaluate_model(model, tokenizer, model_config)
             

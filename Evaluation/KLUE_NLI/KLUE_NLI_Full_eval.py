@@ -69,7 +69,7 @@ MODEL_CONFIGS = [
         is_local=True
     ),
         ModelConfig(
-        name="full-Llama-3.2:3B", 
+        name="full-Llama-3.2-3b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
         output_dir="klue_nli_results/full-llama3.2-3b-klue-nli",
         is_local=True

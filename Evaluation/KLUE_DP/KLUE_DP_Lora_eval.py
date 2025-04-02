@@ -336,9 +336,9 @@ def train_model(model_config):
         evaluation_strategy="steps",
         eval_steps=200,
         learning_rate=2e-5,
-        per_device_train_batch_size=8,  # 배치 크기 증가
-        per_device_eval_batch_size=8,  # 배치 크기 증가
-        gradient_accumulation_steps=2,  # 축적 단계 감소
+        per_device_train_batch_size=4,  # 배치 크기 증가
+        per_device_eval_batch_size=4,  # 배치 크기 증가
+        gradient_accumulation_steps=4,  # 축적 단계 감소
         num_train_epochs=5,
         weight_decay=0.01,
         save_total_limit=3,

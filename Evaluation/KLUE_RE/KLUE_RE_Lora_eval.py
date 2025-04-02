@@ -110,7 +110,7 @@ MODEL_CONFIGS = [
         is_local=True
     ),
         ModelConfig(
-        name="lora-Llama-3.2:3B", 
+        name="lora-Llama-3.2-3b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
         output_dir="klue_re_results/lora-llama3.2-3b-klue-re",
         is_local=True
@@ -263,7 +263,7 @@ def train_model(model_config):
         task_type="CAUSAL_LM",
         target_modules=["att_proj", "attn_out"]
     )    
-    if (model_config.name == "full-Llama-3.2:3B"):
+    if (model_config.name == "lora-Llama-3.2-3B"):
         peft_params = LoraConfig(
             lora_alpha=16,  # LoRA 스케일링 팩터
             lora_dropout=0.1,  # LoRA 드롭아웃 비율
