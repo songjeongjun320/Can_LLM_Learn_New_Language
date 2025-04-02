@@ -17,7 +17,7 @@ from peft import (
 )
 from peft.utils.other import fsdp_auto_wrap_policy
 from sklearn.model_selection import train_test_split 
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, precision_recall_fscore_support  
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -70,34 +70,34 @@ class ModelConfig:
 
 # 모델 설정들 (기본 OLMo 1B, OLMo 7B)
 MODEL_CONFIGS = [
+    # ModelConfig(
+    #     name="lora-OLMo-1b-org", 
+    #     model_path="allenai/OLMo-1B", 
+    #     output_dir="klue_ner_results/lora-olmo1B-org-klue-ner",
+    #     is_local=False
+    # ),
     ModelConfig(
-        name="full-OLMo-1b-org", 
-        model_path="allenai/OLMo-1B", 
-        output_dir="klue_sts_results/full-olmo1B-org-klue-sts",
-        is_local=False
-    ),
-    ModelConfig(
-        name="full-OLMo-1b", 
+        name="lora-OLMo-1b-Tuned", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-        output_dir="klue_sts_results/full-olmo1B-v12-klue-sts",
+        output_dir="klue_ner_results/lora-olmo1B-Tuned-klue-ner",
         is_local=True
     ),
     ModelConfig(
-        name="full-OLMo-7b-org", 
+        name="lora-OLMo-7b-org", 
         model_path="allenai/OLMo-7B", 
-        output_dir="klue_sts_results/full-olmo7B-org-klue-sts",
+        output_dir="klue_ner_results/lora-olmo7B-org-klue-ner",
         is_local=False
     ),
     ModelConfig(
-        name="full-OLMo-7b", 
+        name="lora-OLMo-7b-Tuned", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_sts_results/full-olmo7B-v13-klue-sts",
+        output_dir="klue_ner_results/lora-olmo7B-Tuned-klue-ner",
         is_local=True
     ),
         ModelConfig(
-        name="full-Llama-3.2:3B", 
+        name="lora-Llama-3.2:3B", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_sts_results/full-llama3.2-3b-klue-sts",
+        output_dir="klue_ner_results/lora-llama3.2-3b-klue-ner",
         is_local=True
     )
 ]
@@ -140,53 +140,6 @@ def load_model_and_tokenizer(model_config):
     
     return model, tokenizer
 
-# Custom Dataset for KLUE-NER
-class NERDataset(Dataset):
-    def __init__(self, data_path, tokenizer, max_length=MAX_LENGTH):
-        logger.info(f"Loading NER dataset from {data_path}")
-        with open(data_path, "r", encoding="utf-8") as f:
-            self.data = json.load(f)
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        logger.info(f"Loaded {len(self.data)} samples for NER")
-        
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        item = self.data[idx]
-        
-        tokens = item["tokens"]
-        ner_tags = item["ner_tags"]
-        
-        # Tokenize
-        encoding = self.tokenizer(
-            tokens,
-            is_split_into_words=True,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt"
-        )
-        
-        # Align labels with tokenized input
-        word_ids = encoding.word_ids()
-        labels = [-100] * len(encoding["input_ids"][0])
-        previous_word_idx = None
-        for i, word_idx in enumerate(word_ids):
-            if word_idx is None:
-                labels[i] = -100
-            elif word_idx != previous_word_idx:
-                labels[i] = ner_tags[word_idx]
-            previous_word_idx = word_idx
-        
-        return {
-            "input_ids": encoding["input_ids"].squeeze(0),
-            "attention_mask": encoding["attention_mask"].squeeze(0),
-            "labels": torch.tensor(labels)
-        }
-
-# Training function
 def train_model(model_config):
     # Compute metrics function
     def compute_metrics(p):
@@ -201,13 +154,13 @@ def train_model(model_config):
                     true_labels.append(l)
                     pred_labels.append(p)
         
-        precision, recall, f1, _ = precision_recall_f1_support(true_labels, pred_labels, average="micro", zero_division=0)
+        precision, recall, f1, _ = precision_recall_fscore_support(true_labels, pred_labels, average="micro", zero_division=0)
         return {
             "precision": precision,
             "recall": recall,
             "f1": f1
         }
-
+    
     """Train the model for NER using token classification approach."""
     logger.info(f"Starting training for {model_config.name}")
     
@@ -217,14 +170,66 @@ def train_model(model_config):
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(model_config)
     
-    # Load datasets
-    full_train_data = NERDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    train_data, val_data = train_test_split(
-        full_train_data,
-        test_size=0.2,  # Val 20%
-        random_state=42,  # 재현성 보장
+    # Load datasets directly
+    logger.info(f"Loading NER dataset from {JSON_TRAIN_DATASET_PATH}")
+    with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    
+    # Use datasets library
+    from datasets import Dataset as HFDataset
+    
+    # Convert JSON data to datasets format
+    dataset = HFDataset.from_dict({
+        "tokens": [item["tokens"] for item in data],
+        "ner_tags": [item["ner_tags"] for item in data]
+    })
+    
+    # Define preprocessing function
+    def tokenize_and_align_labels(examples):
+        tokenized_inputs = tokenizer(
+            examples["tokens"],
+            is_split_into_words=True,
+            truncation=True,
+            max_length=MAX_LENGTH,
+            padding="max_length",
+            return_tensors="pt"
+        )
+        
+        labels = []
+        for i, ner_tags in enumerate(examples["ner_tags"]):
+            word_ids = tokenized_inputs.word_ids(batch_index=i)
+            label_ids = [-100] * len(tokenized_inputs["input_ids"][i])
+            
+            previous_word_idx = None
+            for idx, word_idx in enumerate(word_ids):
+                if word_idx is None:
+                    label_ids[idx] = -100
+                elif word_idx != previous_word_idx:
+                    label_ids[idx] = ner_tags[word_idx]
+                previous_word_idx = word_idx
+            
+            labels.append(label_ids)
+        
+        tokenized_inputs["labels"] = labels
+        return tokenized_inputs
+    
+    # Apply preprocessing to the dataset
+    processed_dataset = dataset.map(
+        tokenize_and_align_labels,
+        batched=True,
+        remove_columns=dataset.column_names
+    )
+    
+    # Split into train and validation
+    train_val_dataset = processed_dataset.train_test_split(
+        test_size=0.2,
+        seed=42,
         shuffle=True
     )
+    
+    train_data = train_val_dataset["train"]
+    val_data = train_val_dataset["test"]
+    
     logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
     
     # LoRA 설정 추가
@@ -255,10 +260,10 @@ def train_model(model_config):
         evaluation_strategy="steps",
         eval_steps=200,
         learning_rate=2e-5,
-        per_device_train_batch_size=8,  # 배치 크기 증가
-        per_device_eval_batch_size=8,  # 배치 크기 증가
+        per_device_train_batch_size=16,  # 배치 크기 증가
+        per_device_eval_batch_size=16,  # 배치 크기 증가
         gradient_accumulation_steps=2,  # 축적 단계 감소
-        num_train_epochs=2,
+        num_train_epochs=3,
         weight_decay=0.01,
         save_total_limit=3,
         save_strategy="steps",
@@ -309,7 +314,7 @@ def evaluate_model(model, tokenizer, model_config):
     with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
         val_data = json.load(f)
     
-    val_subset = val_data[:MAX_EVAL_SAMPLES]
+    val_subset = val_data
     
     model.eval()
     device = model.device
@@ -322,13 +327,14 @@ def evaluate_model(model, tokenizer, model_config):
         tokens = item["tokens"]
         gold_labels = item["ner_tags"]
         
-        # Tokenize
+        # Tokenize with return_token_type_ids=False to avoid the error
         encoding = tokenizer(
             tokens,
             is_split_into_words=True,
             truncation=True,
             max_length=MAX_LENGTH,
             padding="max_length",
+            return_token_type_ids=False,  # Add this line to fix the error
             return_tensors="pt"
         ).to(device)
         
@@ -336,7 +342,6 @@ def evaluate_model(model, tokenizer, model_config):
         with torch.no_grad():
             outputs = model(**encoding)
             logits = outputs.logits
-        
         predictions = torch.argmax(logits, dim=2)[0].cpu().numpy()
         word_ids = encoding.word_ids()
         
@@ -363,7 +368,7 @@ def evaluate_model(model, tokenizer, model_config):
         })
     
     # Calculate metrics
-    precision, recall, f1, _ = precision_recall_f1_support(true_labels, pred_labels, average="micro", zero_division=0)
+    precision, recall, f1, _ = precision_recall_fscore_support(true_labels, pred_labels, average="micro", zero_division=0)
     
     logger.info(f"Evaluation results for {model_config.name}:")
     logger.info(f"Precision: {precision:.4f}")
@@ -405,7 +410,7 @@ if __name__ == "__main__":
             
             # Train
             model, tokenizer = train_model(model_config)
-            
+
             # Evaluate
             results = evaluate_model(model, tokenizer, model_config)
             all_results[model_config.name] = results
