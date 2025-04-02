@@ -39,31 +39,31 @@ MODEL_CONFIGS = [
     ModelConfig(
         name="full-OLMo-1b-org", 
         model_path="allenai/OLMo-1B", 
-        output_dir="klue_sts_results/full-olmo1B-org-klue-sts",
+        output_dir="klue_dst_results/full-olmo1B-org-klue-dst",
         is_local=False
     ),
     ModelConfig(
-        name="full-OLMo-1b", 
+        name="full-OLMo-1b-Tuned", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-        output_dir="klue_sts_results/full-olmo1B-v12-klue-sts",
+        output_dir="klue_dst_results/full-olmo1B-v12-klue-dst",
         is_local=True
     ),
     ModelConfig(
         name="full-OLMo-7b-org", 
         model_path="allenai/OLMo-7B", 
-        output_dir="klue_sts_results/full-olmo7B-org-klue-sts",
+        output_dir="klue_dst_results/full-olmo7B-org-klue-dst",
         is_local=False
     ),
     ModelConfig(
-        name="full-OLMo-7b", 
+        name="full-OLMo-7b-Tuned", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_sts_results/full-olmo7B-v13-klue-sts",
+        output_dir="klue_dst_results/full-olmo7B-v13-klue-dst",
         is_local=True
     ),
         ModelConfig(
         name="full-Llama-3.2:3B", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_sts_results/full-llama3.2-3b-klue-sts",
+        output_dir="klue_dst_results/full-llama3.2-3b-klue-dst",
         is_local=True
     )
 ]

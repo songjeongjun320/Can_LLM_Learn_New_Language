@@ -49,36 +49,36 @@ class ModelConfig:
 
 # 모델 설정들 (기본 OLMo 1B, OLMo 7B)
 MODEL_CONFIGS = [
-    ModelConfig(
-        name="full-OLMo-1b-org", 
-        model_path="allenai/OLMo-1B", 
-        output_dir="klue_sts_results/full-olmo1B-org-klue-sts",
-        is_local=False
-    ),
     # ModelConfig(
-    #     name="full-OLMo-1b", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-    #     output_dir="klue_sts_results/full-olmo1B-v12-klue-sts",
-    #     is_local=True
-    # ),
-    # ModelConfig(
-    #     name="full-OLMo-7b-org", 
-    #     model_path="allenai/OLMo-7B", 
-    #     output_dir="klue_sts_results/full-olmo7B-org-klue-sts",
+    #     name="lora-OLMo-1b-org", 
+    #     model_path="allenai/OLMo-1B", 
+    #     output_dir="klue_mrc_results/lora-olmo1B-org-klue-mrc",
     #     is_local=False
     # ),
-    # ModelConfig(
-    #     name="full-OLMo-7b", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-    #     output_dir="klue_sts_results/full-olmo7B-v13-klue-sts",
-    #     is_local=True
-    # ),
-    #     ModelConfig(
-    #     name="full-Llama-3.2:3B", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-    #     output_dir="klue_sts_results/full-llama3.2-3b-klue-sts",
-    #     is_local=True
-    # )
+    ModelConfig(
+        name="lora-OLMo-1b-Tuned", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+        output_dir="klue_mrc_results/lora-olmo1B-v12-klue-mrc",
+        is_local=True
+    ),
+    ModelConfig(
+        name="lora-OLMo-7b-org", 
+        model_path="allenai/OLMo-7B",
+        output_dir="klue_mrc_results/lora-olmo7B-org-klue-mrc",
+        is_local=False
+    ),
+    ModelConfig(
+        name="lora-OLMo-7b-Tuned", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+        output_dir="klue_mrc_results/lora-olmo7B-v13-klue-mrc",
+        is_local=True
+    ),
+        ModelConfig(
+        name="lora-Llama-3.2:3B", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+        output_dir="klue_mrc_results/lora-llama3.2-3b-klue-mrc",
+        is_local=True
+    )
 ]
 
 
@@ -90,6 +90,7 @@ MAX_LENGTH = 1024  # Increased length for MRC which often has longer contexts
 MAX_EVAL_SAMPLES = 200
 
 # Model and tokenizer loading function
+# 모델 로드 부분을 수정
 def load_model_and_tokenizer(model_config):
     """모델 설정에 따라 모델과 토크나이저를 로드합니다."""
     logger.info(f"Load model: {model_config.model_path}")
@@ -109,87 +110,15 @@ def load_model_and_tokenizer(model_config):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # bfloat16 정밀도로 모델 로드 (메모리 효율성 증가)
     model = AutoModelForCausalLM.from_pretrained(
         model_config.model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",  # 자동으로 GPU에 모델 분산
+        device_map="auto",
         local_files_only=is_local,
-        trust_remote_code=True  # OLMo 모델에 필요
+        trust_remote_code=True
     )
     
     return model, tokenizer
-
-# Custom Dataset for KLUE-MRC
-class MachineReadingComprehensionDataset(Dataset):  # 🤗 Dataset 상속
-    def __init__(self, data_path, tokenizer, max_length=MAX_LENGTH):
-        logger.info(f"Loading MRC dataset from {data_path}")
-        with open(data_path, "r", encoding="utf-8") as f:
-            raw_data = json.load(f)  # JSON 데이터 로드
-        
-        # 🤗 Dataset으로 변환
-        self.data = Dataset.from_dict({
-            "title": [item.get("title", "") for item in raw_data],
-            "context": [item.get("context", "") for item in raw_data],
-            "question": [item.get("question", "") for item in raw_data],
-            "answers": [item.get("answers", {"text": [""]}) for item in raw_data]
-        })
-        
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        
-    @property
-    def data(self):
-        return self._data  # 데이터를 반환하는 getter
-    
-    @data.setter
-    def data(self, value):
-        self._data = value  # 데이터를 설정하는 setter
-
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        item = self.data[idx]
-        
-        title = item.get("title", "")
-        context = item.get("context", "")
-        question = item.get("question", "")
-        answers = item.get("answers", {"text": [""]})
-        answer_text = answers.get("text", [""])[0] if answers.get("text") else ""
-        
-        prompt = f"Read the following passage and answer the question.\n\nTitle: {title}\n\nPassage: {context}\n\nQuestion: {question}\n\nAnswer:"
-        
-        completion = f" {answer_text}"
-        
-        full_text = prompt + completion
-        
-        encoded = self.tokenizer(
-            full_text,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt"
-        )
-        
-        prompt_encoded = self.tokenizer(
-            prompt,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt"
-        )
-        
-        labels = encoded["input_ids"].clone().squeeze(0)
-        prompt_length = prompt_encoded["input_ids"].shape[1]
-        labels[:prompt_length] = -100
-        
-        return {
-            "input_ids": encoded["input_ids"].squeeze(0),
-            "attention_mask": encoded["attention_mask"].squeeze(0),
-            "labels": labels
-        }
-
-
 
 def train_model(model_config):
     """Train the model for machine reading comprehension using language modeling approach."""
@@ -204,21 +133,64 @@ def train_model(model_config):
     
     # Load datasets
     logger.info("Loading train and validation datasets")
-    full_train_data = MachineReadingComprehensionDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-
-    train_data, val_data = train_test_split(
-        full_train_data, 
-        test_size=0.2,  # Val 20%
-        random_state=42,  # 재현성 보장
-        shuffle=True
+    # Load data from JSON
+    with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
+        raw_data = json.load(f)
+    
+    # Convert to Hugging Face Dataset directly
+    full_dataset = Dataset.from_dict({
+        "title": [item.get("title", "") for item in raw_data],
+        "context": [item.get("context", "") for item in raw_data],
+        "question": [item.get("question", "") for item in raw_data],
+        "answers": [item.get("answers", {"text": [""]}) for item in raw_data]
+    })
+    
+    # Split into train and validation sets
+    dataset_dict = full_dataset.train_test_split(test_size=0.2, seed=42)
+    train_dataset = dataset_dict["train"]
+    val_dataset = dataset_dict["test"]
+    
+    logger.info(f"Loaded data - train: {len(train_dataset)} examples, validation: {len(val_dataset)} examples")
+    
+    # Define a preprocessing function to format data for training
+    def preprocess_function(examples):
+        formatted_examples = []
+        
+        for i in range(len(examples["question"])):
+            title = examples["title"][i]
+            context = examples["context"][i]
+            question = examples["question"][i]
+            answers = examples["answers"][i]
+            answer_text = answers.get("text", [""])[0] if answers.get("text") else ""
+            
+            prompt = f"Read the following passage and answer the question.\n\nTitle: {title}\n\nPassage: {context}\n\nQuestion: {question}\n\nAnswer:"
+            completion = f" {answer_text}"
+            
+            formatted_examples.append({
+                "prompt": prompt,
+                "completion": completion
+            })
+        
+        return formatted_examples
+    
+    # Process datasets
+    train_data = train_dataset.map(
+        lambda x: {"text": [f"{item['prompt']}{item['completion']}" for item in preprocess_function(x)]},
+        batched=True,
+        remove_columns=train_dataset.column_names
     )
-    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
+    
+    val_data = val_dataset.map(
+        lambda x: {"text": [f"{item['prompt']}{item['completion']}" for item in preprocess_function(x)]},
+        batched=True, 
+        remove_columns=val_dataset.column_names
+    )
 
+    # Rest of your code for training...
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm=False
     )
-
     # LoRA 설정 추가
     peft_params = LoraConfig(
         lora_alpha=16,  # LoRA 스케일링 팩터
@@ -245,16 +217,16 @@ def train_model(model_config):
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
         evaluation_strategy="steps",
-        eval_steps=300,
+        eval_steps=100,
         learning_rate=2e-5,
-        per_device_train_batch_size=32,  # 배치 크기 증가
-        per_device_eval_batch_size=32,  # 배치 크기 증가
+        per_device_train_batch_size=8,  # 배치 크기 증가
+        per_device_eval_batch_size=8,  # 배치 크기 증가
         gradient_accumulation_steps=2,  # 축적 단계 감소
-        num_train_epochs=2,
+        num_train_epochs=3,
         weight_decay=0.01,
         save_total_limit=3,
         save_strategy="steps",
-        save_steps=600,
+        save_steps=200,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
         fp16=True,  # FP16으로 전환

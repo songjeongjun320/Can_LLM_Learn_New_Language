@@ -76,12 +76,12 @@ MODEL_CONFIGS = [
     #     output_dir="klue_ner_results/lora-olmo1B-org-klue-ner",
     #     is_local=False
     # ),
-    ModelConfig(
-        name="lora-OLMo-1b-Tuned", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-        output_dir="klue_ner_results/lora-olmo1B-Tuned-klue-ner",
-        is_local=True
-    ),
+    # ModelConfig(
+    #     name="lora-OLMo-1b-Tuned", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+    #     output_dir="klue_ner_results/lora-olmo1B-Tuned-klue-ner",
+    #     is_local=True
+    # ),
     ModelConfig(
         name="lora-OLMo-7b-org", 
         model_path="allenai/OLMo-7B", 

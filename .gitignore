@@ -20,8 +20,27 @@ Fine_Tuned_Results/
 .ipynb_checkpoints/
 DB/
 llama3.2_3b/
+
+# Result folders
 klue_sts_results/
 klue_dp_results/
+klue_dst_results/
+klue_mrc_results/
+klue_ner_results/
+klue_nli_results/
+klue_re_results/
+klue_tc_results/
+
+# Caches
+klue_dp_cache/
+klue_dst_origin_cache/
+klue_dst_cache/
+klue_mrc_cache/
+klue_ner_cache/
+klue_nli_cache/
+klue_re_cache/
+klue_sts_cache/
+klue_tc_cache/
 
 *.log
 *.zip
