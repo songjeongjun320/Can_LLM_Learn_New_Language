@@ -16,7 +16,7 @@ from peft import (
     prepare_model_for_kbit_training
 )
 from peft.utils.other import fsdp_auto_wrap_policy
-
+from sklearn.model_selection import train_test_split 
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from transformers import (
     AutoModelForCausalLM,
@@ -218,14 +218,15 @@ def train_model(model_config):
     model, tokenizer = load_model_and_tokenizer(model_config)
     
     # Load datasets
-    train_dataset = NERDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    val_dataset = NERDataset(JSON_VAL_DATASET_PATH, tokenizer)
-    logger.info(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
+    full_train_data = NERDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
+    train_data, val_data = train_test_split(
+        full_train_data[:MAX_TRAIN_SAMPLES], 
+        test_size=0.2,  # Val 20%
+        random_state=42,  # 재현성 보장
+        shuffle=True
+    )
+    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
     
-    target_module = ["att_proj", "attn_out"]
-    if (model_config.name == "full-Llama-3.2:3B"):
-        targe_module = ["q_proj", "k_proj"]
-
     # LoRA 설정 추가
     peft_params = LoraConfig(
         lora_alpha=16,  # LoRA 스케일링 팩터
@@ -233,8 +234,17 @@ def train_model(model_config):
         r=64,  # LoRA 랭크
         bias="none",  
         task_type="CAUSAL_LM",
-        target_modules=targe_module
-    )
+        target_modules=["att_proj", "attn_out"]
+    )    
+    if (model_config.name == "full-Llama-3.2:3B"):
+        peft_params = LoraConfig(
+            lora_alpha=16,  # LoRA 스케일링 팩터
+            lora_dropout=0.1,  # LoRA 드롭아웃 비율
+            r=64,  # LoRA 랭크
+            bias="none",  
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "k_proj"]
+        )
 
     # 모델 및 토크나이저 로드 시 LoRA 설정 적용
     model = get_peft_model(model, peft_params)

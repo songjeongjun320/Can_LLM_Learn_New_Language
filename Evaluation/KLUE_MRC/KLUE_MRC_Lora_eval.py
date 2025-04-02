@@ -16,7 +16,7 @@ from peft import (
     prepare_model_for_kbit_training
 )
 from peft.utils.other import fsdp_auto_wrap_policy
-
+from sklearn.model_selection import train_test_split 
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from transformers import (
     AutoModelForCausalLM,
@@ -88,34 +88,6 @@ JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluati
 JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_mrc_validation.json"
 MAX_LENGTH = 1024  # Increased length for MRC which often has longer contexts
 MAX_EVAL_SAMPLES = 200
-
-# Function to check if dataset exists and is valid
-def check_dataset():
-    """Check if the KLUE MRC dataset exists and is valid."""
-    if not os.path.exists(JSON_TRAIN_DATASET_PATH) or not os.path.exists(JSON_VAL_DATASET_PATH):
-        logger.error(f"Dataset files not found at {JSON_TRAIN_DATASET_PATH} or {JSON_VAL_DATASET_PATH}")
-        return False
-    
-    try:
-        with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
-            train_data = json.load(f)
-        with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
-            val_data = json.load(f)
-        
-        logger.info(f"Dataset files loaded successfully. Train samples: {len(train_data)}, Validation samples: {len(val_data)}")
-        
-        # Verify structure of a sample
-        sample = train_data[0]
-        required_fields = ["title", "context", "question", "answers"]
-        if not all(field in sample for field in required_fields):
-            logger.error(f"Dataset format is not as expected, missing required fields")
-            return False
-            
-        logger.info("Dataset format is valid")
-        return True
-    except Exception as e:
-        logger.error(f"Error checking dataset: {str(e)}")
-        return False
 
 # Model and tokenizer loading function
 def load_model_and_tokenizer(model_config):
@@ -217,29 +189,26 @@ def train_model(model_config):
     os.makedirs(model_config.output_dir, exist_ok=True)
     os.makedirs(DATA_CACHE_DIR, exist_ok=True)
     
-    # Check dataset
-    if not check_dataset():
-        logger.error("Dataset check failed. Aborting training.")
-        return None, None
-    
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(model_config)
     
     # Load datasets
     logger.info("Loading train and validation datasets")
-    train_dataset = MachineReadingComprehensionDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    val_dataset = MachineReadingComprehensionDataset(JSON_VAL_DATASET_PATH, tokenizer)
-    logger.info(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
-    
-    # Data collator for language modeling
+    full_train_data = MachineReadingComprehensionDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
+
+    train_data, val_data = train_test_split(
+        full_train_data[:MAX_TRAIN_SAMPLES], 
+        test_size=0.2,  # Val 20%
+        random_state=42,  # 재현성 보장
+        shuffle=True
+    )
+    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
+        # Data collator for language modeling
+
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
         mlm=False
     )
-    
-    target_module = ["att_proj", "attn_out"]
-    if (model_config.name == "full-Llama-3.2:3B"):
-        targe_module = ["q_proj", "k_proj"]
 
     # LoRA 설정 추가
     peft_params = LoraConfig(
@@ -248,8 +217,17 @@ def train_model(model_config):
         r=64,  # LoRA 랭크
         bias="none",  
         task_type="CAUSAL_LM",
-        target_modules=targe_module
-    )
+        target_modules=["att_proj", "attn_out"]
+    )    
+    if (model_config.name == "full-Llama-3.2:3B"):
+        peft_params = LoraConfig(
+            lora_alpha=16,  # LoRA 스케일링 팩터
+            lora_dropout=0.1,  # LoRA 드롭아웃 비율
+            r=64,  # LoRA 랭크
+            bias="none",  
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "k_proj"]
+        )
 
     # 모델 및 토크나이저 로드 시 LoRA 설정 적용
     model = get_peft_model(model, peft_params)
@@ -287,6 +265,7 @@ def train_model(model_config):
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        data_collator=data_collator,
         eval_dataset=val_dataset,
         peft_config=peft_params,
     )

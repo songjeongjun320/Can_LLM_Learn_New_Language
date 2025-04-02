@@ -11,6 +11,7 @@ from transformers import (
     DataCollatorForLanguageModeling,
     EarlyStoppingCallback
 )
+from sklearn.model_selection import train_test_split  # 여기가 핵심!
 from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
 import logging
 import re
@@ -18,6 +19,8 @@ from tqdm import tqdm
 import evaluate
 from dotenv import load_dotenv
 from huggingface_hub import login, HfApi
+
+from torch.utils.data import Dataset
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -195,74 +198,26 @@ def load_model_and_tokenizer(model_config):
 
 # 메인 학습 함수
 def train_model(model_config):
-    # 데이터셋 준비
-    prepare_dataset_json()
-    
-    # 데이터셋 로드
-    logger.info("JSON loading...")
-    with open(JSON_DATASET_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    
-    train_data = data["train"]
-    val_data = data["validation"]
-    
-    logger.info(f"train data: {len(train_data)}, valid data: {len(val_data)}")
+    # 1. 원본 데이터 로드
+    with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
+        full_train_data = json.load(f)  # 전체 훈련 데이터
+
+    train_data, val_data = train_test_split(
+        full_train_data[:MAX_TRAIN_SAMPLES], 
+        test_size=0.2,  # Val 20%
+        random_state=42,  # 재현성 보장
+        shuffle=True
+    )
+    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
     
     # 모델 및 토크나이저 로드
-    model, tokenizer = load_model_and_tokenizer(model_config)
-    
-    # 학습용 데이터셋 생성
-    from torch.utils.data import Dataset
-    
-    class SimpleDataset(Dataset):
-        def __init__(self, data, tokenizer, max_length):
-            self.data = data
-            self.tokenizer = tokenizer
-            self.max_length = max_length
-        
-        def __len__(self):
-            return len(self.data)
-        
-        def __getitem__(self, idx):
-            item = self.data[idx]
-            prompt = item["input"]
-            completion = item["output"]
-            
-            # 프롬프트와 완성 결합
-            full_text = prompt + completion
-            
-            # 토큰화
-            encoded = self.tokenizer(
-                full_text,
-                truncation=True,
-                max_length=self.max_length,
-                padding="max_length",
-                return_tensors="pt"
-            )
-            
-            # 프롬프트 부분 토큰화 (라벨 마스킹용)
-            prompt_encoded = self.tokenizer(
-                prompt,
-                truncation=True,
-                max_length=self.max_length,
-                return_tensors="pt"
-            )
-            
-            # 라벨 생성: 프롬프트 부분은 -100으로 마스킹
-            labels = encoded["input_ids"].clone().squeeze(0)
-            prompt_length = prompt_encoded["input_ids"].shape[1]
-            labels[:prompt_length] = -100
-            
-            return {
-                "input_ids": encoded["input_ids"].squeeze(0),
-                "attention_mask": encoded["attention_mask"].squeeze(0),
-                "labels": labels
-            }
-    
-    # 데이터셋 생성
-    train_dataset = SimpleDataset(train_data, tokenizer, MAX_LENGTH)
-    val_dataset = SimpleDataset(val_data, tokenizer, MAX_LENGTH)
-    
+    model, tokenizer = load_model_and_tokenizer(model_config)    
+
+    # Data collator for language modeling
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False
+    )
     # 데이터 콜레이터
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,

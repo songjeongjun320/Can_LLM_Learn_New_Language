@@ -11,6 +11,8 @@ from transformers import (
     EarlyStoppingCallback,
     DataCollatorForLanguageModeling
 )
+
+from sklearn.model_selection import train_test_split  # 여기가 핵심!
 from sklearn.metrics import accuracy_score, f1_score
 import logging
 from tqdm import tqdm
@@ -207,19 +209,20 @@ def train_model(model_config):
     os.makedirs(model_config.output_dir, exist_ok=True)
     os.makedirs(DATA_CACHE_DIR, exist_ok=True)
     
-    # Check dataset
-    if not check_dataset():
-        logger.error("Dataset check failed. Aborting training.")
-        return None, None
-    
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(model_config)
     
     # Load datasets
     logger.info("Loading train and validation datasets")
-    train_dataset = MachineReadingComprehensionDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    val_dataset = MachineReadingComprehensionDataset(JSON_VAL_DATASET_PATH, tokenizer)
-    logger.info(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
+    full_train_data = MachineReadingComprehensionDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
+
+    train_data, val_data = train_test_split(
+        full_train_data[:MAX_TRAIN_SAMPLES], 
+        test_size=0.2,  # Val 20%
+        random_state=42,  # 재현성 보장
+        shuffle=True
+    )
+    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
     
     # Data collator for language modeling
     data_collator = DataCollatorForLanguageModeling(

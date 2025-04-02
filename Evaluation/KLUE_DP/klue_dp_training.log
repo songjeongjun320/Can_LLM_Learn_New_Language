@@ -1,0 +1,12 @@
+2025-04-01 15:23:59,184 - __main__ - INFO - Saving final model to: klue_dp_results/full-olmo7B-v13-klue-dp/final
+2025-04-01 15:24:20,370 - __main__ - INFO - Training completed for full-OLMo-7b
+2025-04-01 15:24:20,402 - __main__ - INFO - Evaluating model: full-OLMo-7b
+2025-04-01 16:00:38,170 - __main__ - INFO - Evaluation results for full-OLMo-7b:
+2025-04-01 16:00:38,487 - __main__ - INFO - UAS: 0.4433
+2025-04-01 16:00:38,488 - __main__ - INFO - LAS: 0.4201
+2025-04-01 16:00:38,488 - __main__ - INFO - Total tokens evaluated: 3052
+2025-04-01 16:00:38,660 - __main__ - INFO - Evaluation logs saved to: klue_dp_results/full-olmo7B-v13-klue-dp/evaluation_log.json
+2025-04-01 16:00:38,660 - __main__ - INFO - Evaluation results saved to: klue_dp_results/full-olmo7B-v13-klue-dp/eval_results.json
+2025-04-01 16:00:38,665 - __main__ - INFO - Completed processing for full-OLMo-7b
+2025-04-01 16:00:38,762 - __main__ - INFO - All results saved to: klue_dp_results/combined_results.json
+2025-04-01 16:00:38,762 - __main__ - INFO - KLUE-DP training and evaluation completed

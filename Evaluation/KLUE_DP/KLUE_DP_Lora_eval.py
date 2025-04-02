@@ -17,6 +17,7 @@ from peft import (
 )
 from peft.utils.other import fsdp_auto_wrap_policy
 
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from transformers import (
     AutoModelForCausalLM,
@@ -271,107 +272,6 @@ class DependencyParsingDataset(Dataset):
             "labels": labels
         }
 
-# Biaffine layer for arc scoring
-class Biaffine(torch.nn.Module):
-    def __init__(self, in1_dim, in2_dim, bias=True):
-        super().__init__()
-        self.weight = torch.nn.Parameter(torch.randn(in1_dim, in2_dim))
-        self.bias = bias
-        if bias:
-            self.bias1 = torch.nn.Parameter(torch.randn(in1_dim))
-            self.bias2 = torch.nn.Parameter(torch.randn(in2_dim))
-        self.init_weights()
-    
-    def init_weights(self):
-        torch.nn.init.xavier_uniform_(self.weight)
-        if self.bias:
-            torch.nn.init.zeros_(self.bias1)
-            torch.nn.init.zeros_(self.bias2)
-    
-    def forward(self, x1, x2):
-        batch, len1, dim1 = x1.size()
-        batch, len2, dim2 = x2.size()
-        
-        if self.bias:
-            x1 = x1 + self.bias1.unsqueeze(0).unsqueeze(0)
-            x2 = x2 + self.bias2.unsqueeze(0).unsqueeze(0)
-        
-        part1 = torch.matmul(x1.reshape(-1, dim1), self.weight)
-        part1 = part1.reshape(batch, len1, dim2)
-        scores = torch.bmm(part1, x2.transpose(1, 2))
-        
-        return scores
-
-# Dependency Parser model
-class DependencyParser(torch.nn.Module):
-    def __init__(self, base_model, tokenizer):
-        super().__init__()
-        self.base_model = base_model
-        self.tokenizer = tokenizer
-        self.hidden_size = base_model.config.hidden_size
-        
-        # Add dependency parsing specific layers
-        self.arc_biaffine = Biaffine(self.hidden_size, self.hidden_size, bias=True)
-        self.label_classifier = torch.nn.Linear(self.hidden_size, NUM_LABELS)
-        self.init_weights()
-        
-        logger.info(f"Initialized dependency parser with hidden size: {self.hidden_size}")
-        
-    def init_weights(self):
-        torch.nn.init.xavier_uniform_(self.label_classifier.weight)
-        self.label_classifier.bias.data.zero_()
-        
-    def gradient_checkpointing_enable(self):
-        if hasattr(self.base_model, 'gradient_checkpointing_enable'):
-            self.base_model.gradient_checkpointing_enable()
-            logger.info("Gradient checkpointing enabled")
-        else:
-            logger.warning("Gradient checkpointing not available for this model")
-        
-    def forward(self, input_ids, attention_mask, word_attention_mask=None, head_indices=None, deprel_labels=None, labels=None):
-        # Get base model outputs
-        outputs = self.base_model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            labels=labels,
-            output_hidden_states=True
-        )
-        
-        # If training with language modeling loss, return base model outputs
-        if labels is not None:
-            return outputs
-        
-        # For dependency parsing specific tasks
-        hidden_states = outputs.hidden_states[-1]
-        
-        batch_size, seq_len, hidden_dim = hidden_states.shape
-        
-        # Get arc scores and label logits
-        arc_scores = self.arc_biaffine(hidden_states, hidden_states)
-        label_logits = self.label_classifier(hidden_states)
-        
-        loss = None
-        if head_indices is not None and deprel_labels is not None:
-            arc_loss = F.cross_entropy(
-                arc_scores.view(-1, seq_len),
-                head_indices.view(-1),
-                ignore_index=-100
-            )
-            
-            label_loss = F.cross_entropy(
-                label_logits.view(-1, NUM_LABELS),
-                deprel_labels.view(-1),
-                ignore_index=-100
-            )
-            
-            loss = arc_loss + label_loss
-        
-        return {
-            "loss": loss,
-            "arc_scores": arc_scores,
-            "label_logits": label_logits
-        }
-
 def train_model(model_config):
     """Train the model for dependency parsing using language modeling approach."""
     logger.info(f"Starting training for {model_config.name}")
@@ -388,8 +288,18 @@ def train_model(model_config):
     
     # Load datasets
     logger.info("Loading train and validation datasets")
-    train_dataset = DependencyParsingDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    val_dataset = DependencyParsingDataset(JSON_VAL_DATASET_PATH, tokenizer)
+    
+    # 1. 원본 데이터 로드
+    full_train_data = DependencyParsingDataset(JSON_TRAIN_DATASET_PATH, tokenizer)  # 전체 훈련 데이터
+
+    train_data, val_data = train_test_split(
+        full_train_data[:MAX_TRAIN_SAMPLES], 
+        test_size=0.2,  # Val 20%
+        random_state=42,  # 재현성 보장
+        shuffle=True
+    )
+    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
+    
     logger.info(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
     
     # Data collator for language modeling
@@ -398,10 +308,6 @@ def train_model(model_config):
         mlm=False
     )
     
-    target_module = ["att_proj", "attn_out"]
-    if (model_config.name == "full-Llama-3.2:3B"):
-        targe_module = ["q_proj", "k_proj"]
-
     # LoRA 설정 추가
     peft_params = LoraConfig(
         lora_alpha=16,  # LoRA 스케일링 팩터
@@ -409,8 +315,17 @@ def train_model(model_config):
         r=64,  # LoRA 랭크
         bias="none",  
         task_type="CAUSAL_LM",
-        target_modules=targe_module
-    )
+        target_modules=["att_proj", "attn_out"]
+    )    
+    if (model_config.name == "full-Llama-3.2:3B"):
+        peft_params = LoraConfig(
+            lora_alpha=16,  # LoRA 스케일링 팩터
+            lora_dropout=0.1,  # LoRA 드롭아웃 비율
+            r=64,  # LoRA 랭크
+            bias="none",  
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "k_proj"]
+        )
 
     # 모델 및 토크나이저 로드 시 LoRA 설정 적용
     model = get_peft_model(model, peft_params)
@@ -500,7 +415,6 @@ def parse_model_output(output_text, tokens):
     return heads, deprels
 
 # Function to evaluate model on KLUE-DP metrics
-import re
 def evaluate_model(model, tokenizer, model_config):
     """Evaluate the model on KLUE-DP metrics using local JSON data."""
     logger.info(f"Evaluating model: {model_config.name}")

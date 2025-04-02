@@ -3,6 +3,7 @@ import json
 import numpy as np
 from scipy.stats import pearsonr
 from sklearn.metrics import precision_recall_fscore_support, mean_squared_error, mean_absolute_error
+from sklearn.model_selection import train_test_split 
 
 def calculate_metrics(true_scores, pred_scores):
     # None 값 제거 및 유효한 점수 쌍 필터링

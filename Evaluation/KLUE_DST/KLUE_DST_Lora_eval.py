@@ -1,24 +1,33 @@
-import os
+# Standard library imports
 import json
-import torch
+import logging
+import os
+import re
+from tqdm import tqdm
+
+# Third-party imports
 import numpy as np
-from datasets import load_dataset
+import torch
+from datasets import load_dataset, Dataset
+from peft import (
+    LoraConfig,
+    PeftModel,
+    get_peft_model,
+    prepare_model_for_kbit_training
+)
+from peft.utils.other import fsdp_auto_wrap_policy
+
+from sklearn.model_selection import train_test_split  # 여기가 핵심!
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    TrainingArguments,
-    Trainer,
+    BitsAndBytesConfig,
     DataCollatorForLanguageModeling,
-    EarlyStoppingCallback
+    Trainer,
+    TrainingArguments
 )
-from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
-import logging
-import re
-from tqdm import tqdm
-import evaluate
-from dotenv import load_dotenv
-from huggingface_hub import login, HfApi
-
+from trl import SFTTrainer, SFTConfig
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -70,7 +79,8 @@ DATA_CACHE_DIR = "./klue_dst_origin_cache"
 JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dst_train.json"
 JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dst_validation.json"
 MAX_LENGTH = 768  # DST는 대화 컨텍스트가 더 길 수 있으므로 길이 증가
-MAX_EVAL_SAMPLES = 200
+MAX_TRAIN_SAMPLES = 300000
+MAX_EVAL_SAMPLES = 500
 
 # 데이터셋 준비 함수 - JSON 파일 생성
 def prepare_dataset_json():
@@ -195,125 +205,74 @@ def load_model_and_tokenizer(model_config):
 
 # 메인 학습 함수
 def train_model(model_config):
-    # 데이터셋 준비
-    prepare_dataset_json()
-    
-    # 데이터셋 로드
-    logger.info("JSON loading...")
-    with open(JSON_DATASET_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    
-    train_data = data["train"]
-    val_data = data["validation"]
-    
-    logger.info(f"train data: {len(train_data)}, valid data: {len(val_data)}")
+    # 1. 원본 데이터 로드
+    with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
+        full_train_data = json.load(f)  # 전체 훈련 데이터
+
+    train_data, val_data = train_test_split(
+        full_train_data[:MAX_TRAIN_SAMPLES], 
+        test_size=0.2,  # Val 20%
+        random_state=42,  # 재현성 보장
+        shuffle=True
+    )
+    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
     
     # 모델 및 토크나이저 로드
     model, tokenizer = load_model_and_tokenizer(model_config)
-    
-    # 학습용 데이터셋 생성
-    from torch.utils.data import Dataset
-    
-    class SimpleDataset(Dataset):
-        def __init__(self, data, tokenizer, max_length):
-            self.data = data
-            self.tokenizer = tokenizer
-            self.max_length = max_length
-        
-        def __len__(self):
-            return len(self.data)
-        
-        def __getitem__(self, idx):
-            item = self.data[idx]
-            prompt = item["input"]
-            completion = item["output"]
-            
-            # 프롬프트와 완성 결합
-            full_text = prompt + completion
-            
-            # 토큰화
-            encoded = self.tokenizer(
-                full_text,
-                truncation=True,
-                max_length=self.max_length,
-                padding="max_length",
-                return_tensors="pt"
-            )
-            
-            # 프롬프트 부분 토큰화 (라벨 마스킹용)
-            prompt_encoded = self.tokenizer(
-                prompt,
-                truncation=True,
-                max_length=self.max_length,
-                return_tensors="pt"
-            )
-            
-            # 라벨 생성: 프롬프트 부분은 -100으로 마스킹
-            labels = encoded["input_ids"].clone().squeeze(0)
-            prompt_length = prompt_encoded["input_ids"].shape[1]
-            labels[:prompt_length] = -100
-            
-            return {
-                "input_ids": encoded["input_ids"].squeeze(0),
-                "attention_mask": encoded["attention_mask"].squeeze(0),
-                "labels": labels
-            }
-    
-    # 데이터셋 생성
-    train_dataset = SimpleDataset(train_data, tokenizer, MAX_LENGTH)
-    val_dataset = SimpleDataset(val_data, tokenizer, MAX_LENGTH)
-    
-    # 데이터 콜레이터
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False
-    )
 
-    target_module = ["att_proj", "attn_out"]
-    if (model_config.name == "full-Llama-3.2:3B"):
-        targe_module = ["q_proj", "k_proj"]
-
-    # LoRA 설정 추가
+    # 데이터 샘플 확인
+    logger.info(f"Sample train data: {train_dataset[0]}")
+    
+    # LoRA 설정 추가 (OLMo에 맞게 수정 필요)
     peft_params = LoraConfig(
-        lora_alpha=16,  # LoRA 스케일링 팩터
-        lora_dropout=0.1,  # LoRA 드롭아웃 비율
-        r=64,  # LoRA 랭크
-        bias="none",  
+        lora_alpha=8,
+        lora_dropout=0.05,
+        r=4,
+        bias="none",
         task_type="CAUSAL_LM",
-        target_modules=targe_module
+        target_modules=["att_proj", "attn_out"]  # OLMo 확인 후 조정
     )
+    if model_config.name == "full-Llama-3.2:3B":
+        peft_params = LoraConfig(
+            lora_alpha=8,
+            lora_dropout=0.05,
+            r=4,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "k_proj"]
+        )
 
-    # 모델 및 토크나이저 로드 시 LoRA 설정 적용
+    # 모델에 LoRA 적용
     model = get_peft_model(model, peft_params)
     model.print_trainable_parameters()
 
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
         evaluation_strategy="steps",
-        eval_steps=200,
-        learning_rate=2e-5,
-        per_device_train_batch_size=8,  # 배치 크기 증가
+        eval_steps=300,
+        learning_rate=3e-5,
+        per_device_train_batch_size=12,  # 배치 크기 증가
         per_device_eval_batch_size=8,  # 배치 크기 증가
         gradient_accumulation_steps=2,  # 축적 단계 감소
-        num_train_epochs=5,
+        num_train_epochs=3,
         weight_decay=0.01,
         save_total_limit=3,
         save_strategy="steps",
-        save_steps=400,
+        save_steps=600,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
-        logging_steps=100,
+        logging_steps=50,
         fp16=True,  # FP16으로 전환
         bf16=False,  # BF16 비활성화
         lr_scheduler_type="cosine",
-        warmup_ratio=0.05,  # Warmup 비율 감소
+        warmup_ratio=0.02,  # Warmup 비율 감소
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         report_to="none",
-        gradient_checkpointing=False,  # 체크포인팅 비활성화
+        gradient_checkpointing=True,  # 체크포인팅 비활성화
         optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
     )
 
-    # SFTTrainer 초기화 시 tokenizer와 packing 제거
+    # SFTTrainer 초기화
     logger.info("Setting up SFTTrainer...")
     trainer = SFTTrainer(
         model=model,
@@ -327,11 +286,9 @@ def train_model(model_config):
     logger.info("Starting training...")
     trainer.train()
     
-    # 최종 모델 저장 (PEFT 모델로)
+    # 최종 모델 저장
     final_model_path = os.path.join(model_config.output_dir, "final")
     logger.info(f"Saving final model to: {final_model_path}")
-    
-    # PEFT 모델과 토크나이저 저장
     trainer.model.save_pretrained(final_model_path)
     tokenizer.save_pretrained(final_model_path)
     
@@ -402,11 +359,9 @@ def calculate_slot_f1(true_states, pred_states):
 def evaluate_model(model, tokenizer, model_config):
     logger.info(f"Evaluating the model: {model_config.name}")
     
-    # 데이터셋 로드
-    with open(JSON_DATASET_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    
-    val_data = data["validation"][:MAX_EVAL_SAMPLES]  # 평가 샘플 제한
+    # 검증 데이터 로드
+    with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
+        val_data = json.load(f)[:MAX_EVAL_SAMPLES]  # 평가 샘플 제한
     
     model.eval()
     
