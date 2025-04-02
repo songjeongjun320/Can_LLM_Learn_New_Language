@@ -55,30 +55,30 @@ MODEL_CONFIGS = [
         output_dir="klue_sts_results/full-olmo1B-org-klue-sts",
         is_local=False
     ),
-    ModelConfig(
-        name="full-OLMo-1b", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-        output_dir="klue_sts_results/full-olmo1B-v12-klue-sts",
-        is_local=True
-    ),
-    ModelConfig(
-        name="full-OLMo-7b-org", 
-        model_path="allenai/OLMo-7B", 
-        output_dir="klue_sts_results/full-olmo7B-org-klue-sts",
-        is_local=False
-    ),
-    ModelConfig(
-        name="full-OLMo-7b", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_sts_results/full-olmo7B-v13-klue-sts",
-        is_local=True
-    ),
-        ModelConfig(
-        name="full-Llama-3.2:3B", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_sts_results/full-llama3.2-3b-klue-sts",
-        is_local=True
-    )
+    # ModelConfig(
+    #     name="full-OLMo-1b", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+    #     output_dir="klue_sts_results/full-olmo1B-v12-klue-sts",
+    #     is_local=True
+    # ),
+    # ModelConfig(
+    #     name="full-OLMo-7b-org", 
+    #     model_path="allenai/OLMo-7B", 
+    #     output_dir="klue_sts_results/full-olmo7B-org-klue-sts",
+    #     is_local=False
+    # ),
+    # ModelConfig(
+    #     name="full-OLMo-7b", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+    #     output_dir="klue_sts_results/full-olmo7B-v13-klue-sts",
+    #     is_local=True
+    # ),
+    #     ModelConfig(
+    #     name="full-Llama-3.2:3B", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+    #     output_dir="klue_sts_results/full-llama3.2-3b-klue-sts",
+    #     is_local=True
+    # )
 ]
 
 
@@ -121,39 +121,49 @@ def load_model_and_tokenizer(model_config):
     return model, tokenizer
 
 # Custom Dataset for KLUE-MRC
-class MachineReadingComprehensionDataset(Dataset):
+class MachineReadingComprehensionDataset(Dataset):  # 🤗 Dataset 상속
     def __init__(self, data_path, tokenizer, max_length=MAX_LENGTH):
         logger.info(f"Loading MRC dataset from {data_path}")
-        
         with open(data_path, "r", encoding="utf-8") as f:
-            self.data = json.load(f)
+            raw_data = json.load(f)  # JSON 데이터 로드
+        
+        # 🤗 Dataset으로 변환
+        self.data = Dataset.from_dict({
+            "title": [item.get("title", "") for item in raw_data],
+            "context": [item.get("context", "") for item in raw_data],
+            "question": [item.get("question", "") for item in raw_data],
+            "answers": [item.get("answers", {"text": [""]}) for item in raw_data]
+        })
         
         self.tokenizer = tokenizer
         self.max_length = max_length
-        logger.info(f"Loaded {len(self.data)} samples for MRC")
         
+    @property
+    def data(self):
+        return self._data  # 데이터를 반환하는 getter
+    
+    @data.setter
+    def data(self, value):
+        self._data = value  # 데이터를 설정하는 setter
+
     def __len__(self):
         return len(self.data)
     
     def __getitem__(self, idx):
         item = self.data[idx]
         
-        # Extract data
         title = item.get("title", "")
         context = item.get("context", "")
         question = item.get("question", "")
         answers = item.get("answers", {"text": [""]})
         answer_text = answers.get("text", [""])[0] if answers.get("text") else ""
         
-        # Create prompt and completion
         prompt = f"Read the following passage and answer the question.\n\nTitle: {title}\n\nPassage: {context}\n\nQuestion: {question}\n\nAnswer:"
         
         completion = f" {answer_text}"
         
-        # Combine prompt and completion for training
         full_text = prompt + completion
         
-        # Tokenize the full text
         encoded = self.tokenizer(
             full_text,
             truncation=True,
@@ -162,7 +172,6 @@ class MachineReadingComprehensionDataset(Dataset):
             return_tensors="pt"
         )
         
-        # Tokenize only the prompt to create labels
         prompt_encoded = self.tokenizer(
             prompt,
             truncation=True,
@@ -170,7 +179,6 @@ class MachineReadingComprehensionDataset(Dataset):
             return_tensors="pt"
         )
         
-        # Create labels, masking the prompt portion with -100
         labels = encoded["input_ids"].clone().squeeze(0)
         prompt_length = prompt_encoded["input_ids"].shape[1]
         labels[:prompt_length] = -100
@@ -180,6 +188,8 @@ class MachineReadingComprehensionDataset(Dataset):
             "attention_mask": encoded["attention_mask"].squeeze(0),
             "labels": labels
         }
+
+
 
 def train_model(model_config):
     """Train the model for machine reading comprehension using language modeling approach."""
@@ -235,16 +245,16 @@ def train_model(model_config):
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
         evaluation_strategy="steps",
-        eval_steps=200,
+        eval_steps=300,
         learning_rate=2e-5,
-        per_device_train_batch_size=8,  # 배치 크기 증가
-        per_device_eval_batch_size=8,  # 배치 크기 증가
+        per_device_train_batch_size=32,  # 배치 크기 증가
+        per_device_eval_batch_size=32,  # 배치 크기 증가
         gradient_accumulation_steps=2,  # 축적 단계 감소
         num_train_epochs=2,
         weight_decay=0.01,
         save_total_limit=3,
         save_strategy="steps",
-        save_steps=400,
+        save_steps=600,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
         fp16=True,  # FP16으로 전환
@@ -263,9 +273,9 @@ def train_model(model_config):
     trainer = SFTTrainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
+        train_dataset=train_data,
         data_collator=data_collator,
-        eval_dataset=val_dataset,
+        eval_dataset=val_data,
         peft_config=peft_params,
     )
 

@@ -225,9 +225,9 @@ def train_model(model_config):
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
+        train_dataset=train_data,
         data_collator=data_collator,
-        eval_dataset=val_dataset,
+        eval_dataset=val_data,
         compute_metrics=compute_metrics,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
     )

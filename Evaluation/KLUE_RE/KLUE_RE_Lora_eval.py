@@ -309,9 +309,9 @@ def train_model(model_config):
     trainer = SFTTrainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
+        train_dataset=train_data,
         data_collator=data_collator,
-        eval_dataset=val_dataset,
+        eval_dataset=val_data,
         peft_config=peft_params,
     )
 
