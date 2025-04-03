@@ -291,152 +291,273 @@ def train_model(model_config):
 
 # --- evaluate_model 수정 ---
 def evaluate_model(model, tokenizer, model_config):
-    """Evaluate the instruction-tuned model using text generation."""
+    """Evaluate the instruction-tuned model using text generation AND likelihood estimation."""
     logger.info("=============================")
-    logger.info(f"Evaluating model: {model_config.name} using generation")
+    logger.info(f"Evaluating model: {model_config.name} using generation & likelihood")
     logger.info("=============================")
 
     with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
         val_data = json.load(f)
 
-    # 평가 데이터셋 크기 조절 (테스트용)
-    # val_subset = val_data[:100] # 전체 데이터로 평가 시 주석 처리
     val_subset = val_data
+    # val_subset = val_data[:20] # DEBUG: AUPRC 계산 속도 때문에 작게 테스트
 
     model.eval()
-    # device = model.device # device_map="auto" 사용 시 device 직접 지정 불필요
-    device = next(model.parameters()).device # 모델의 첫 파라미터가 있는 디바이스 사용
+    device = next(model.parameters()).device
+    loss_fct = CrossEntropyLoss(reduction='none') # Likelihood 계산용 loss 함수
 
+    # 결과 저장을 위한 리스트
     true_label_ids = []
-    pred_label_ids = []
+    pred_label_ids_generation = [] # 생성 기반 예측 저장
+    all_likelihood_scores = []     # 모든 레이블에 대한 Likelihood 점수 저장
     logs = []
 
-    # 모델 생성 파라미터 설정
+    # === Part 1: Standard Generation for Accuracy, Macro F1, Micro F1 ===
+    logger.info("--- Starting Part 1: Evaluation based on Generation ---")
     generation_config = {
         "max_new_tokens": MAX_NEW_TOKENS,
         "eos_token_id": tokenizer.eos_token_id,
         "pad_token_id": tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id,
-        "do_sample": False, # 평가 시에는 greedy search 사용
+        "do_sample": False,
         "early_stopping": True,
     }
 
-    for item in tqdm(val_subset, desc="Evaluating"):
+    for item in tqdm(val_subset, desc="Part 1: Generating Predictions"):
         sentence = item["sentence"]
         subject_entity = item["subject_entity"]
         object_entity = item["object_entity"]
         gold_label_id = item["label"]
-        gold_relation_name = ID2LABEL[gold_label_id]
+        true_label_ids.append(gold_label_id) # 실제 레이블 저장
 
-        # 엔티티 위치에 특수 마커 추가 ([S], [/S], [O], [/O] 사용 - train과 동일하게)
+        # 프롬프트 구성 (train과 동일)
         subj_start, subj_end = subject_entity["start_idx"], subject_entity["end_idx"]
         obj_start, obj_end = object_entity["start_idx"], object_entity["end_idx"]
-
         if subj_start < obj_start:
-            marked_sentence = (
-                sentence[:subj_start] + "[S]" + sentence[subj_start:subj_end+1] + "[/S]" +
-                sentence[subj_end+1:obj_start] + "[O]" + sentence[obj_start:obj_end+1] + "[/O]" +
-                sentence[obj_end+1:]
-            )
+            marked_sentence = ( sentence[:subj_start] + "[S]" + sentence[subj_start:subj_end+1] + "[/S]" +
+                                sentence[subj_end+1:obj_start] + "[O]" + sentence[obj_start:obj_end+1] + "[/O]" +
+                                sentence[obj_end+1:] )
         else:
-            marked_sentence = (
-                sentence[:obj_start] + "[O]" + sentence[obj_start:obj_end+1] + "[/O]" +
-                sentence[obj_end+1:subj_start] + "[S]" + sentence[subj_start:subj_end+1] + "[/S]" +
-                sentence[subj_end+1:]
-            )
-
-        # 모델 입력 프롬프트 구성 (정답 레이블 제외)
+            marked_sentence = ( sentence[:obj_start] + "[O]" + sentence[obj_start:obj_end+1] + "[/O]" +
+                                sentence[obj_end+1:subj_start] + "[S]" + sentence[subj_start:subj_end+1] + "[/S]" +
+                                sentence[subj_end+1:] )
         prompt = f"문장에서 주어진 두 개체 간의 관계를 분류하세요.\n\n문장: {marked_sentence}\n\n관계: "
+        prompt_encoding = tokenizer(prompt, return_tensors="pt", truncation=False) # 프롬프트 부분만 토큰화 (길이 계산용)
+        prompt_input_ids = prompt_encoding.input_ids.to(device)
+        prompt_attention_mask = prompt_encoding.attention_mask.to(device)
 
-        # 토큰화
-        encoding = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=MAX_SEQ_LENGTH - MAX_NEW_TOKENS) # 생성 공간 확보
-        input_ids = encoding.input_ids.to(device)
-        attention_mask = encoding.attention_mask.to(device)
-
-        generated_ids = None
         generated_text = ""
+        predicted_label_id_gen = NO_RELATION_ID # 기본값
+
         try:
-            # 예측 (텍스트 생성)
             with torch.no_grad():
+                # 입력 길이 확인 및 조정 (모델 최대 길이 - 생성 길이)
+                max_prompt_len = MAX_SEQ_LENGTH - MAX_NEW_TOKENS
+                if prompt_input_ids.shape[1] > max_prompt_len:
+                    logger.warning(f"Prompt length {prompt_input_ids.shape[1]} exceeds max {max_prompt_len}. Truncating.")
+                    prompt_input_ids = prompt_input_ids[:, :max_prompt_len]
+                    prompt_attention_mask = prompt_attention_mask[:, :max_prompt_len]
+
                 outputs = model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
+                    input_ids=prompt_input_ids,
+                    attention_mask=prompt_attention_mask,
                     **generation_config
                 )
-                # 생성된 부분만 추출 (입력 프롬프트 제외)
-                generated_ids = outputs[0][input_ids.shape[1]:]
+                generated_ids = outputs[0][prompt_input_ids.shape[1]:]
                 generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
 
-            # 생성된 텍스트를 레이블 ID로 변환
-            # 생성 결과가 정의된 레이블 이름과 정확히 일치하는지 확인
-            predicted_label_id = LABEL_NAME_TO_ID.get(generated_text, LABEL2ID["no_relation"]) # 없으면 no_relation 처리
+            predicted_label_id_gen = LABEL_NAME_TO_ID.get(generated_text, NO_RELATION_ID)
 
         except Exception as e:
             logger.warning(f"Error during generation for item {item.get('guid', 'N/A')}: {e}")
-            logger.warning(f"Prompt: {prompt}")
-            if generated_ids is not None:
-                 logger.warning(f"Generated IDs: {generated_ids}")
-            predicted_label_id = LABEL2ID["no_relation"] # 오류 발생 시 no_relation
+            predicted_label_id_gen = NO_RELATION_ID
 
-        true_label_ids.append(gold_label_id)
-        pred_label_ids.append(predicted_label_id)
+        pred_label_ids_generation.append(predicted_label_id_gen)
 
-        # 로그 기록 (생성된 텍스트 포함)
+        # 로그 기록 (생성 기반) - AUPRC 계산 후 상세 로그에 점수 추가 예정
         logs.append({
             "guid": item.get('guid', 'N/A'),
             "sentence": sentence,
             "subject_entity": subject_entity["word"],
             "object_entity": object_entity["word"],
-            "gold_label": gold_relation_name,
-            "generated_text": generated_text, # 생성된 실제 텍스트
-            "pred_label": ID2LABEL[predicted_label_id] # 매핑된 예측 레이블
+            "gold_label": ID2LABEL[gold_label_id],
+            "generated_text": generated_text,
+            "pred_label_generation": ID2LABEL[predicted_label_id_gen],
+            # "likelihood_scores": {} # 나중에 채움
         })
 
-    # 메트릭 계산 (ID 기반)
-    accuracy = accuracy_score(true_label_ids, pred_label_ids)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        true_label_ids, pred_label_ids, average="macro", zero_division=0
+    # === Part 2: Likelihood Estimation for AUPRC ===
+    logger.info("--- Starting Part 2: Calculating Likelihood Scores for AUPRC (This will be slow) ---")
+    for i, item in enumerate(tqdm(val_subset, desc="Part 2: Calculating Likelihoods")):
+        sentence = item["sentence"]
+        subject_entity = item["subject_entity"]
+        object_entity = item["object_entity"]
+
+        # 프롬프트 구성 (동일)
+        subj_start, subj_end = subject_entity["start_idx"], subject_entity["end_idx"]
+        obj_start, obj_end = object_entity["start_idx"], object_entity["end_idx"]
+        if subj_start < obj_start:
+             marked_sentence = ( sentence[:subj_start] + "[S]" + sentence[subj_start:subj_end+1] + "[/S]" +
+                                 sentence[subj_end+1:obj_start] + "[O]" + sentence[obj_start:obj_end+1] + "[/O]" +
+                                 sentence[obj_end+1:] )
+        else:
+             marked_sentence = ( sentence[:obj_start] + "[O]" + sentence[obj_start:obj_end+1] + "[/O]" +
+                                 sentence[obj_end+1:subj_start] + "[S]" + sentence[subj_start:subj_end+1] + "[/S]" +
+                                 sentence[subj_end+1:] )
+        base_prompt = f"문장에서 주어진 두 개체 간의 관계를 분류하세요.\n\n문장: {marked_sentence}\n\n관계: "
+        base_prompt_tokenized = tokenizer(base_prompt, return_tensors='pt', truncation=False)
+        base_prompt_len = base_prompt_tokenized.input_ids.shape[1]
+
+        scores_for_item = {} # 현재 샘플의 레이블별 점수 저장
+
+        for label_id, label_name in ID2LABEL.items():
+            target_text = base_prompt + label_name # 프롬프트 + 레이블 이름
+            try:
+                # 전체 텍스트 토큰화 및 모델 최대 길이 확인/조정
+                target_encoding = tokenizer(
+                    target_text,
+                    return_tensors='pt',
+                    truncation=True, # 전체 길이가 넘으면 잘라냄
+                    max_length=MAX_SEQ_LENGTH,
+                    padding=False # 패딩 불필요
+                )
+                target_input_ids = target_encoding.input_ids.to(device)
+                target_attention_mask = target_encoding.attention_mask.to(device)
+
+                # 실제 프롬프트 길이와 레이블 길이 (잘렸을 수 있으므로 다시 계산)
+                current_prompt_len = base_prompt_len
+                # 만약 target_input_ids가 잘렸다면, 프롬프트 길이도 잘린 길이 기준으로 조정
+                if target_input_ids.shape[1] < base_prompt_len + len(tokenizer.encode(label_name, add_special_tokens=False)):
+                    # 이 경우는 보통 프롬프트 자체가 너무 길어서 잘린 경우
+                    current_prompt_len = target_input_ids.shape[1] - len(tokenizer.encode(label_name, add_special_tokens=False))
+                    current_prompt_len = max(0, current_prompt_len) # 음수 방지
+
+                label_len = target_input_ids.shape[1] - current_prompt_len
+                if label_len <= 0: # 레이블 부분이 아예 잘려나간 경우
+                    scores_for_item[label_id] = -float('inf') # 매우 낮은 점수 부여
+                    continue
+
+                with torch.no_grad():
+                    outputs = model(input_ids=target_input_ids, attention_mask=target_attention_mask)
+                    logits = outputs.logits
+
+                # Shift logits and labels for next token prediction loss
+                shift_logits = logits[..., :-1, :].contiguous()
+                shift_labels = target_input_ids[..., 1:].contiguous()
+
+                # Calculate loss only for the label part
+                # loss 계산 범위: [current_prompt_len - 1, target_input_ids.shape[1] - 2] (shift 기준)
+                loss_start_index = current_prompt_len - 1
+                loss_end_index = target_input_ids.shape[1] - 1 # shift_labels 기준 끝 인덱스
+
+                if loss_start_index >= loss_end_index : # loss 계산할 토큰이 없는 경우
+                     scores_for_item[label_id] = -float('inf')
+                     continue
+
+                # 배치 차원 제거 (view) 및 해당 부분만 loss 계산
+                label_logits = shift_logits.view(-1, shift_logits.size(-1))[loss_start_index:loss_end_index]
+                label_targets = shift_labels.view(-1)[loss_start_index:loss_end_index]
+
+                loss = loss_fct(label_logits, label_targets) # shape: [label_len]
+                avg_neg_log_likelihood = loss.mean().item()
+
+                # 점수는 likelihood에 비례해야 하므로, -loss 사용 (높을수록 좋음)
+                scores_for_item[label_id] = -avg_neg_log_likelihood
+
+            except Exception as e:
+                logger.warning(f"Error calculating likelihood for label '{label_name}' in item {item.get('guid', 'N/A')}: {e}")
+                scores_for_item[label_id] = -float('inf') # 오류 시 매우 낮은 점수
+
+        # 점수 벡터 정렬 및 저장
+        score_vector = [scores_for_item.get(j, -float('inf')) for j in range(NUM_LABELS)]
+        all_likelihood_scores.append(score_vector)
+        # 상세 로그에 점수 추가 (필요시)
+        # logs[i]["likelihood_scores"] = {ID2LABEL[k]: v for k, v in scores_for_item.items()}
+
+    # === Part 3: Calculate All Metrics ===
+    logger.info("--- Starting Part 3: Calculating Final Metrics ---")
+
+    # 1. Accuracy & Macro F1 (from generation)
+    accuracy = accuracy_score(true_label_ids, pred_label_ids_generation)
+    precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
+        true_label_ids, pred_label_ids_generation, average="macro", zero_division=0
     )
 
-    # 클래스별 메트릭 계산
-    labels_present = sorted(list(set(true_label_ids) | set(pred_label_ids)))
+    # 2. Micro F1 (without no_relation) (from generation)
+    precision_micro_nr, recall_micro_nr, f1_micro_nr, _ = precision_recall_fscore_support(
+        true_label_ids,
+        pred_label_ids_generation,
+        labels=RE_LABELS_WITHOUT_NR, # no_relation 제외한 라벨 ID 리스트 사용
+        average="micro",
+        zero_division=0
+    )
+
+    # 3. Macro AUPRC (without no_relation) (from likelihood scores)
+    macro_auprc_nr = None
+    if all_likelihood_scores:
+        y_scores_np = np.array(all_likelihood_scores)
+        y_true_binarized = label_binarize(true_label_ids, classes=list(range(NUM_LABELS)))
+
+        average_precisions = []
+        valid_classes_count = 0
+        for label_id in RE_LABELS_WITHOUT_NR:
+            # 해당 클래스가 실제 레이블에 존재하는지 확인
+            if np.sum(y_true_binarized[:, label_id]) > 0:
+                # 해당 클래스의 실제값과 예측 점수 추출
+                class_true = y_true_binarized[:, label_id]
+                class_scores = y_scores_np[:, label_id]
+                # average_precision_score 계산
+                ap = average_precision_score(class_true, class_scores)
+                average_precisions.append(ap)
+                valid_classes_count += 1
+            else:
+                 logger.debug(f"Skipping AUPRC calculation for class {ID2LABEL[label_id]} as it's not present in true labels.")
+
+
+        if valid_classes_count > 0:
+            macro_auprc_nr = np.mean(average_precisions)
+        else:
+            logger.warning("No relevant classes found in true labels to calculate Macro AUPRC.")
+            macro_auprc_nr = 0.0 # 계산 불가 시 0 처리 또는 None
+
+    # 4. Per-class metrics (from generation)
+    labels_present = sorted(list(set(true_label_ids) | set(pred_label_ids_generation)))
     precision_per_class, recall_per_class, f1_per_class, support_per_class = precision_recall_fscore_support(
-        true_label_ids, pred_label_ids, labels=labels_present, average=None, zero_division=0
+        true_label_ids, pred_label_ids_generation, labels=labels_present, average=None, zero_division=0
     )
-
     per_class_metrics = {
-        ID2LABEL[label_id]: {
-            "precision": float(p),
-            "recall": float(r),
-            "f1": float(f),
-            "support": int(s)
-        }
+        ID2LABEL[label_id]: {"precision": float(p), "recall": float(r), "f1": float(f), "support": int(s)}
         for label_id, p, r, f, s in zip(labels_present, precision_per_class, recall_per_class, f1_per_class, support_per_class)
     }
 
+    # 결과 로깅
     logger.info(f"Evaluation results for {model_config.name}:")
-    logger.info(f"Accuracy: {accuracy:.4f}")
-    logger.info(f"Macro Precision: {precision:.4f}")
-    logger.info(f"Macro Recall: {recall:.4f}")
-    logger.info(f"Macro F1: {f1:.4f}")
-    # logger.info("Per-class metrics:")
-    # logger.info(json.dumps(per_class_metrics, indent=2, ensure_ascii=False)) # 한글 깨짐 방지
+    logger.info(f"Accuracy (Generation): {accuracy:.4f}")
+    logger.info(f"Macro Precision (Generation): {precision_macro:.4f}")
+    logger.info(f"Macro Recall (Generation): {recall_macro:.4f}")
+    logger.info(f"Macro F1 (Generation, All Classes): {f1_macro:.4f}")
+    logger.info(f"Micro F1 (Generation, without no_relation): {f1_micro_nr:.4f}")
+    logger.info(f"Macro AUPRC (Likelihood, without no_relation): {macro_auprc_nr if macro_auprc_nr is not None else 'N/A'}")
+    # logger.info("Per-class metrics (Generation):")
+    # logger.info(json.dumps(per_class_metrics, indent=2, ensure_ascii=False))
 
     results = {
         "model": model_config.name,
-        "accuracy": float(accuracy),
-        "precision": float(precision),
-        "recall": float(recall),
-        "f1": float(f1),
+        "accuracy_generation": float(accuracy),
+        "precision_macro_generation": float(precision_macro),
+        "recall_macro_generation": float(recall_macro),
+        "f1_macro_generation_all_classes": float(f1_macro),
+        "f1_micro_generation_without_no_relation": float(f1_micro_nr),
+        "macro_auprc_likelihood_without_no_relation": float(macro_auprc_nr) if macro_auprc_nr is not None else None,
         "total_samples": len(val_subset),
-        "per_class_metrics": per_class_metrics
+        "per_class_metrics_generation": per_class_metrics
     }
 
-    # 로그 및 결과 저장 (기존과 동일)
-    log_file_path = os.path.join(model_config.output_dir, "evaluation_log.json")
+    # 로그 및 결과 저장
+    log_file_path = os.path.join(model_config.output_dir, "evaluation_log_likelihood.json")
     with open(log_file_path, "w", encoding="utf-8") as f:
         json.dump(logs, f, ensure_ascii=False, indent=2)
 
-    results_file_path = os.path.join(model_config.output_dir, "eval_results.json")
+    results_file_path = os.path.join(model_config.output_dir, "eval_results_likelihood.json")
     with open(results_file_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
@@ -445,103 +566,72 @@ def evaluate_model(model, tokenizer, model_config):
 
     return results
 
-# Main execution (기존과 거의 동일, 평가 전용 로직 약간 수정)
+
+# Main execution (기존과 거의 동일, 평가 전용 로직 사용)
 if __name__ == "__main__":
-    logger.info("Starting KLUE-RE evaluation only") # 로그 메시지 수정
+    logger.info("Starting KLUE-RE Training and Evaluation (Likelihood-based)")
 
     all_results = {}
 
     for model_config in MODEL_CONFIGS:
-        logger.info(f"Processing model for evaluation: {model_config.name}")
+        logger.info(f"Processing model: {model_config.name}")
 
         try:
-            # 출력 디렉토리는 여전히 결과 저장을 위해 필요할 수 있음
             os.makedirs(model_config.output_dir, exist_ok=True)
 
-            # === Train (주석 처리) ===
-            # # 학습을 원할 경우 아래 주석 해제
+            # === Train & Evaluate ===
+            # logger.info(f"Starting training for {model_config.name}...")
             # trained_model, trained_tokenizer = train_model(model_config)
             # logger.info(f"Training finished for {model_config.name}. Starting evaluation...")
             # # 학습된 모델과 토크나이저로 바로 평가 진행
             # results = evaluate_model(trained_model, trained_tokenizer, model_config)
 
-
-            # === Evaluate Only (활성화) ===
-            # 저장된 모델로 평가만 수행
+            # === Evaluate Only (필요시 아래 코드 사용) ===
             logger.info("Loading base model and tokenizer for evaluation...")
-            # 기본 모델과 토크나이저 로드
             base_model, tokenizer = load_model_and_tokenizer(model_config)
-
-            # 평가 시에도 학습과 동일하게 특수 토큰 추가 및 임베딩 리사이즈 필요
             special_tokens = ["[S]", "[/S]", "[O]", "[/O]"]
             num_added_toks = tokenizer.add_tokens(special_tokens, special_tokens=True)
-            logger.info(f"Added {num_added_toks} special tokens for evaluation.")
-            # 토큰이 추가된 경우에만 리사이즈 수행
             if num_added_toks > 0:
                 base_model.resize_token_embeddings(len(tokenizer))
-                logger.info(f"Resized base model token embeddings to {len(tokenizer)} for evaluation.")
-
-            # 저장된 PEFT 어댑터 경로 (train_model에서 저장한 경로)
             peft_model_path = os.path.join(model_config.output_dir, "final")
             logger.info(f"Attempting to load PEFT model from: {peft_model_path}")
-
-            # PEFT 어댑터 디렉토리 존재 여부 확인
             if not os.path.exists(peft_model_path):
-                 logger.error(f"PEFT model directory not found at {peft_model_path}. Cannot proceed with evaluation for {model_config.name}.")
-                 # FileNotFoundError 대신 로깅하고 다음 모델로 건너뛰기
-                 continue # 다음 model_config 로 이동
-
-            # Load PEFT model (어댑터를 기본 모델에 적용)
+                 logger.error(f"PEFT model directory not found at {peft_model_path}.")
+                 continue
             try:
-                model = PeftModel.from_pretrained(
-                    base_model,
-                    peft_model_path,
-                    torch_dtype=torch.bfloat16, # 기본 모델 로드 시 사용한 타입과 일치
-                    device_map="auto"           # 자동 디바이스 매핑 사용
-                )
+                model = PeftModel.from_pretrained(base_model, peft_model_path, torch_dtype=torch.bfloat16, device_map="auto")
                 logger.info("PEFT model loaded successfully onto base model for evaluation")
             except Exception as load_error:
                 logger.error(f"Failed to load PEFT model from {peft_model_path}: {load_error}")
-                logger.exception("PEFT loading exception details:")
-                continue # 다음 model_config 로 이동
-
-            # Evaluate the loaded PEFT model
+                continue
             logger.info(f"Starting evaluation for {model_config.name}...")
             results = evaluate_model(model, tokenizer, model_config)
             # === End Evaluate Only ===========================================
-            
 
             all_results[model_config.name] = results
-
             logger.info(f"Completed evaluation processing for {model_config.name}")
 
-            # 메모리 정리 (GPU 메모리 해제 시도)
+            # 메모리 정리
             logger.info(f"Cleaning up resources for {model_config.name}...")
-            del model       # PEFT 모델 (또는 병합된 모델) 삭제
-            del base_model  # 기본 모델 삭제
-            del tokenizer   # 토크나이저 삭제
+            del trained_model # 또는 model (evaluate only 시)
+            # if 'base_model' in locals(): del base_model # evaluate only 시
+            del trained_tokenizer # 또는 tokenizer
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             logger.info(f"Resources cleaned up for {model_config.name}")
 
-
         except Exception as e:
-            # 루프 내의 다른 예외 처리 (예: evaluate_model 내부 오류)
             logger.error(f"An unexpected error occurred while processing {model_config.name}: {str(e)}")
             logger.exception("Overall processing exception details:")
-            # 필요시 메모리 정리 시도
-            if 'model' in locals(): del model
-            if 'base_model' in locals(): del base_model
-            if 'tokenizer' in locals(): del tokenizer
+            if 'trained_model' in locals(): del trained_model
+            if 'trained_tokenizer' in locals(): del trained_tokenizer
             if torch.cuda.is_available(): torch.cuda.empty_cache()
-            continue # 다음 model_config 로 이동
+            continue
 
-    # Save combined results (기존과 동일)
-    combined_results_path = os.path.join("klue_re_results", "combined_results.json")
+    # Save combined results
+    combined_results_path = os.path.join("klue_re_results_v2", "combined_results_likelihood.json")
     os.makedirs(os.path.dirname(combined_results_path), exist_ok=True)
-
     with open(combined_results_path, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
-
     logger.info(f"All evaluation results saved to: {combined_results_path}")
-    logger.info("KLUE-RE evaluation completed")
+    logger.info("KLUE-RE training and evaluation completed")
