@@ -4,11 +4,12 @@ import logging
 import os
 import re
 from tqdm import tqdm
-
+# Use datasets library
+from datasets import Dataset as HFDataset
 # Third-party imports
 import numpy as np
 import torch
-from datasets import load_dataset, Dataset
+from datasets import load_dataset
 from peft import (
     LoraConfig,
     PeftModel,
@@ -41,23 +42,14 @@ logger = logging.getLogger(__name__)
 
 # KLUE NER Label Definitions
 NER_TAGS = [
-    "B-LC",     # 0
-    "I-LC",     # 1
-    "B-DT",     # 2
-    "I-DT",     # 3
-    "B-OG",     # 4
-    "I-OG",     # 5
-    "B-PS",     # 6
-    "I-PS",     # 7
-    "B-QT",     # 8
-    "I-QT",     # 9
-    "B-TI",     # 10
-    "I-TI",     # 11
-    "O"         # 12
+    "B-LC", "I-LC", "B-DT", "I-DT", "B-OG", "I-OG",
+    "B-PS", "I-PS", "B-QT", "I-QT", "B-TI", "I-TI", "O"
 ]
-NUM_LABELS = len(NER_TAGS)
+
+# 올바른 매핑 생성
 LABEL2ID = {label: idx for idx, label in enumerate(NER_TAGS)}
-ID2LABEL = {idx: label for label, idx in enumerate(NER_TAGS)}
+ID2LABEL = {idx: label for idx, label in enumerate(NER_TAGS)} 
+NUM_LABELS = len(NER_TAGS)
 logger.info(f"Total number of KLUE-NER labels: {NUM_LABELS}")
 
 # Model configuration class
@@ -107,7 +99,6 @@ DATA_CACHE_DIR = "./klue_ner_cache"
 JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_ner_train.json"
 JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_ner_validation.json"
 MAX_LENGTH = 512
-MAX_EVAL_SAMPLES = 200
 
 # Model and tokenizer loading function
 def load_model_and_tokenizer(model_config):
@@ -175,8 +166,6 @@ def train_model(model_config):
     with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
     
-    # Use datasets library
-    from datasets import Dataset as HFDataset
     
     # Convert JSON data to datasets format
     dataset = HFDataset.from_dict({
@@ -294,6 +283,7 @@ def train_model(model_config):
     # 학습 실행
     logger.info("Starting training...")
     trainer.train()
+    # trainer.train(resume_from_checkpoint=True) # 가장 최신 체크포인트부터
     
     # 최종 모델 저장 (PEFT 모델로)
     final_model_path = os.path.join(model_config.output_dir, "final")

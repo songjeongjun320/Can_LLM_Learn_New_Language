@@ -16,6 +16,7 @@ from peft import (
     prepare_model_for_kbit_training
 )
 from peft.utils.other import fsdp_auto_wrap_policy
+from seqeval.metrics import f1_score as entity_f1_score
 from sklearn.model_selection import train_test_split 
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from transformers import (
@@ -49,18 +50,18 @@ class ModelConfig:
 
 # 모델 설정들 (기본 OLMo 1B, OLMo 7B)
 MODEL_CONFIGS = [
-    # ModelConfig(
-    #     name="lora-OLMo-1b-org", 
-    #     model_path="allenai/OLMo-1B", 
-    #     output_dir="klue_mrc_results/lora-olmo1B-org-klue-mrc",
-    #     is_local=False
-    # ),
-    # ModelConfig(
-    #     name="lora-OLMo-1b-Tuned", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-    #     output_dir="klue_mrc_results/lora-olmo1B-v12-klue-mrc",
-    #     is_local=True
-    # ),
+    ModelConfig(
+        name="lora-OLMo-1b-org", 
+        model_path="allenai/OLMo-1B", 
+        output_dir="klue_mrc_results/lora-olmo1B-org-klue-mrc",
+        is_local=False
+    ),
+    ModelConfig(
+        name="lora-OLMo-1b-Tuned", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+        output_dir="klue_mrc_results/lora-olmo1B-v12-klue-mrc",
+        is_local=True
+    ),
     # ModelConfig(
     #     name="lora-OLMo-7b-org", 
     #     model_path="allenai/OLMo-7B",
@@ -87,13 +88,14 @@ DATA_CACHE_DIR = "./klue_mrc_cache"
 JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_mrc_train.json"
 JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_mrc_validation.json"
 MAX_LENGTH = 1024  # Increased length for MRC which often has longer contexts
-MAX_EVAL_SAMPLES = 200
 
 # Model and tokenizer loading function
 # 모델 로드 부분을 수정
 def load_model_and_tokenizer(model_config):
     """모델 설정에 따라 모델과 토크나이저를 로드합니다."""
+    logger.info("===========================================")
     logger.info(f"Load model: {model_config.model_path}")
+    logger.info("===========================================")
 
     is_local=False
     if (model_config.is_local):
@@ -219,7 +221,7 @@ def train_model(model_config):
         evaluation_strategy="steps",
         eval_steps=100,
         learning_rate=2e-5,
-        per_device_train_batch_size=4,  # 배치 크기 증가
+        per_device_train_batch_size=8,  # 배치 크기 증가
         per_device_eval_batch_size=4,  # 배치 크기 증가
         gradient_accumulation_steps=4,  # 축적 단계 감소
         num_train_epochs=3,
@@ -254,6 +256,8 @@ def train_model(model_config):
     # 학습 실행
     logger.info("Starting training...")
     trainer.train()
+    # trainer.train(resume_from_checkpoint=True)
+
     
     # 최종 모델 저장 (PEFT 모델로)
     final_model_path = os.path.join(model_config.output_dir, "final")
@@ -313,7 +317,7 @@ def evaluate_model(model, tokenizer, model_config):
         val_data = json.load(f)
     
     # Limit number of samples for faster evaluation
-    val_subset = val_data[:MAX_EVAL_SAMPLES]
+    val_subset = val_data
     
     model.eval()
     
@@ -409,31 +413,102 @@ def evaluate_model(model, tokenizer, model_config):
 
 # Main execution function
 if __name__ == "__main__":
-    logger.info("Starting KLUE-MRC training and evaluation")
-    
+    logger.info("Starting KLUE-MRC evaluation only") # 로그 메시지 변경
+
     # Process each model configuration
     all_results = {}
-    
+
     for model_config in MODEL_CONFIGS:
-        logger.info(f"Processing model: {model_config.name}")
-        
+        logger.info(f"Processing model for evaluation: {model_config.name}")
+
         try:
-            # Create output directories
+            # Create output directories (로그 및 결과 저장을 위해 필요)
             os.makedirs(model_config.output_dir, exist_ok=True)
-            
-            # Train model
-            model, tokenizer = train_model(model_config)
-            
-            if model is not None:
-                # Evaluate model
+
+            # === Train (주석 처리 또는 제거) ===
+            model, tokenizer = train_model(model_config) # 학습 건너뛰기
+
+
+            # === Evaluate Only ===================================
+            # === Evaluate Only ===================================
+            # logger.info("Loading base model and tokenizer for evaluation...")
+            # base_model, tokenizer = load_model_and_tokenizer(model_config)
+            # if tokenizer is None:
+            #      logger.error(f"Failed to load tokenizer for {model_config.name}. Skipping evaluation.")
+            #      # 필요한 경우 base_model 정리
+            #      del base_model
+            #      if torch.cuda.is_available(): torch.cuda.empty_cache()
+            #      continue
+
+            # peft_model_path = os.path.join(model_config.output_dir, "final")
+            # logger.info(f"Attempting to load PEFT adapter from: {peft_model_path}")
+
+            # if not os.path.exists(peft_model_path) or not os.path.isdir(peft_model_path):
+            #      logger.error(f"PEFT adapter directory not found or is not a directory at {peft_model_path}. Skipping evaluation for {model_config.name}.")
+            #      # 리소스 정리
+            #      del base_model
+            #      del tokenizer
+            #      if torch.cuda.is_available(): torch.cuda.empty_cache()
+            #      continue # 다음 model_config 로 이동
+            # try:
+            #     # PeftModel.from_pretrained를 사용하여 어댑터 로드
+            #     model = PeftModel.from_pretrained(
+            #         base_model,
+            #         peft_model_path,
+            #         torch_dtype=torch.bfloat16, # 기본 모델 로드 시 사용한 타입과 일치시키는 것이 좋음
+            #         device_map="auto"           # 자동 디바이스 매핑 사용
+            #     )
+
+            #     logger.info("PEFT model loaded successfully onto base model for evaluation.")
+
+            # except Exception as load_error:
+            #     logger.error(f"Failed to load PEFT model from {peft_model_path}: {load_error}")
+            #     logger.exception("PEFT loading exception details:")
+            #     # 리소스 정리
+            #     del base_model
+            #     del tokenizer
+            #     if torch.cuda.is_available(): torch.cuda.empty_cache()
+            #     continue # 다음 model_config 로 이동
+
+            # === Evaluate Only ===================================
+            # === Evaluate Only ===================================
+
+            # 로드된 PEFT 모델로 평가 수행
+            if model is not None and tokenizer is not None:
+                logger.info(f"Starting evaluation for {model_config.name}...")
                 results = evaluate_model(model, tokenizer, model_config)
                 all_results[model_config.name] = results
-            
-            logger.info(f"Completed processing for {model_config.name}")
-            
+            else:
+                 logger.warning(f"Skipping evaluation for {model_config.name} due to model or tokenizer loading issues.")
+
+            logger.info(f"Completed evaluation processing for {model_config.name}")
+
         except Exception as e:
-            logger.error(f"Error processing {model_config.name}: {str(e)}")
-            logger.exception("Exception details:")
+            # 루프 내 다른 예외 처리 (예: evaluate_model 내부 오류)
+            logger.error(f"An unexpected error occurred while processing {model_config.name}: {str(e)}")
+            logger.exception("Overall processing exception details:")
+            # 현재 반복에서 생성된 객체가 있다면 정리 시도
+            # (주의: 에러 발생 위치에 따라 'model', 'base_model' 등이 정의되지 않았을 수 있음)
+            if 'model' in locals() and model is not None: del model
+            if 'base_model' in locals() and base_model is not None: del base_model
+            if 'tokenizer' in locals() and tokenizer is not None: del tokenizer
+            if torch.cuda.is_available(): torch.cuda.empty_cache()
+            continue # 다음 model_config 로 이동
+        finally:
+            # 각 모델 처리 후 메모리 정리 (성공/실패 여부와 관계없이 시도)
+            logger.info(f"Cleaning up resources for {model_config.name}...")
+            if 'model' in locals() and model is not None:
+                 del model          # PEFT 모델 (또는 병합된 모델) 삭제
+                 model = None       # 참조 제거
+            if 'base_model' in locals() and base_model is not None:
+                 del base_model     # 기본 모델 삭제
+                 base_model = None  # 참조 제거
+            if 'tokenizer' in locals() and tokenizer is not None:
+                 del tokenizer      # 토크나이저 삭제
+                 tokenizer = None   # 참조 제거
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logger.info(f"Resources cleaned up for {model_config.name}")
     
     # Save combined results
     combined_results_path = "klue_mrc_results/combined_results.json"

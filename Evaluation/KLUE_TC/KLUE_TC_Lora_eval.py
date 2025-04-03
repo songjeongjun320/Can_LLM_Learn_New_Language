@@ -17,11 +17,10 @@ from peft import (
 )
 from peft.utils.other import fsdp_auto_wrap_policy
 from sklearn.model_selection import train_test_split 
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import accuracy_score, mean_absolute_error, mean_squared_error, precision_recall_fscore_support
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    BitsAndBytesConfig,
     DataCollatorForLanguageModeling,
     Trainer,
     TrainingArguments
@@ -41,13 +40,13 @@ logger = logging.getLogger(__name__)
 
 # KLUE TC Label Definitions
 TC_LABELS = [
-    "IT/과학",  # 0
-    "경제",     # 1
-    "사회",     # 2
-    "생활/문화", # 3
-    "세계",     # 4
-    "스포츠",    # 5
-    "정치"      # 6
+    "IT/SCIENCE",  # 0
+    "ECONOMY",     # 1
+    "SOCIETY",     # 2
+    "CULTURE", # 3
+    "WORLD",     # 4
+    "SPORTS",    # 5
+    "POLITICS"      # 6
 ]
 NUM_LABELS = len(TC_LABELS)
 LABEL2ID = {label: idx for idx, label in enumerate(TC_LABELS)}
@@ -56,10 +55,11 @@ logger.info(f"Total number of KLUE-TC labels: {NUM_LABELS}")
 
 # Model configuration class
 class ModelConfig:
-    def __init__(self, name, model_path, output_dir):
+    def __init__(self, name, model_path, output_dir, is_local):
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
+        self.is_local = is_local
 
 # Model configurations (주어진 MODEL_CONFIGS 사용)
 MODEL_CONFIGS = [
@@ -75,20 +75,20 @@ MODEL_CONFIGS = [
         output_dir="klue_tc_results/lora-olmo1B-v12-klue-tc",
         is_local=True
     ),
-    ModelConfig(
-        name="lora-OLMo-7b-org", 
-        model_path="allenai/OLMo-7B", 
-        output_dir="klue_tc_results/lora-olmo7B-org-klue-tc",
-        is_local=False
-    ),
-    ModelConfig(
-        name="lora-OLMo-7b-Tuned", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_tc_results/lora-olmo7B-v13-klue-tc",
-        is_local=True
-    ),
+    # ModelConfig(
+    #     name="lora-OLMo-7b-org", 
+    #     model_path="allenai/OLMo-7B", 
+    #     output_dir="klue_tc_results/lora-olmo7B-org-klue-tc",
+    #     is_local=False
+    # ),
+    # ModelConfig(
+    #     name="lora-OLMo-7b-Tuned", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+    #     output_dir="klue_tc_results/lora-olmo7B-v13-klue-tc",
+    #     is_local=True
+    # ),
         ModelConfig(
-        name="lora-Llama-3.2:3B", 
+        name="lora-Llama-3.2-3b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
         output_dir="klue_tc_results/lora-llama3.2-3b-klue-tc",
         is_local=True
@@ -99,8 +99,8 @@ MODEL_CONFIGS = [
 DATA_CACHE_DIR = "./klue_tc_cache"
 JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_tc_train.json"
 JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_tc_validation.json"
-MAX_LENGTH = 512
-MAX_EVAL_SAMPLES = 200
+MAX_LENGTH = 64
+MAX_EVAL_SAMPLES = 500
 
 # Model and tokenizer loading function
 def load_model_and_tokenizer(model_config):
@@ -133,44 +133,12 @@ def load_model_and_tokenizer(model_config):
     
     return model, tokenizer
 
-# Custom Dataset for KLUE-TC
-class TCDataset(Dataset):
-    def __init__(self, data_path, tokenizer, max_length=MAX_LENGTH):
-        logger.info(f"Loading TC dataset from {data_path}")
-        with open(data_path, "r", encoding="utf-8") as f:
-            self.data = json.load(f)
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        logger.info(f"Loaded {len(self.data)} samples for TC")
-        
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        item = self.data[idx]
-        
-        title = item["title"]
-        label = item["label"]
-        
-        # Tokenize the title
-        encoding = self.tokenizer(
-            title,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt"
-        )
-        
-        return {
-            "input_ids": encoding["input_ids"].squeeze(0),
-            "attention_mask": encoding["attention_mask"].squeeze(0),
-            "labels": torch.tensor(label, dtype=torch.long)
-        }
-
 # Training function
 def train_model(model_config):
     """Train the model for TC using sequence classification approach."""
+    logger.info("============================================")
     logger.info(f"Starting training for {model_config.name}")
+    logger.info("============================================")
     
     os.makedirs(model_config.output_dir, exist_ok=True)
     os.makedirs(DATA_CACHE_DIR, exist_ok=True)
@@ -178,34 +146,65 @@ def train_model(model_config):
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(model_config)
     
-    # Load datasets
-    full_train_data = TCDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    train_data, val_data = train_test_split(
-        full_train_data, 
-        test_size=0.2,  # Val 20%
-        random_state=42,  # 재현성 보장
+    # Load and process the dataset directly
+    logger.info(f"Loading TC dataset from {JSON_TRAIN_DATASET_PATH}")
+    with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
+        dataset = json.load(f)
+    logger.info(f"Loaded {len(dataset)} samples for TC")
+    
+    # Tokenization function
+    def tokenize_function(example):
+        encoding = tokenizer(
+            example["title"],
+            truncation=True,
+            max_length=MAX_LENGTH,
+            padding="max_length",
+            return_tensors="pt"
+        )
+        return {
+            "input_ids": encoding["input_ids"].squeeze(0),
+            "attention_mask": encoding["attention_mask"].squeeze(0),
+            "labels": torch.tensor(example["label"], dtype=torch.long)
+        }
+    
+    # Process all examples
+    processed_dataset = [tokenize_function(item) for item in dataset]
+    
+    # Convert to Hugging Face Dataset
+    processed_dataset = Dataset.from_list(processed_dataset)
+    
+    # Split into train and validation sets using datasets' train_test_split
+    split_dataset = processed_dataset.train_test_split(
+        test_size=0.2,  # 20% for validation
+        seed=42,        # Ensure reproducibility
         shuffle=True
     )
-    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
+    
+    train_dataset = split_dataset["train"]
+    val_dataset = split_dataset["test"]
+    
+    logger.info(f"Processed data - train: {len(train_dataset)} examples, validation: {len(val_dataset)} examples")
+    
     data_collator = DataCollatorForLanguageModeling(
         tokenizer=tokenizer,
-        mlm=False
+        mlm=False,
+        pad_to_multiple_of=8  # For tensor core efficiency
     )
     
     # LoRA 설정 추가
     peft_params = LoraConfig(
         lora_alpha=16,  # LoRA 스케일링 팩터
         lora_dropout=0.1,  # LoRA 드롭아웃 비율
-        r=64,  # LoRA 랭크
+        r=16,  # LoRA 랭크
         bias="none",  
         task_type="CAUSAL_LM",
         target_modules=["att_proj", "attn_out"]
     )    
-    if (model_config.name == "full-Llama-3.2:3B"):
+    if (model_config.name == "lora-Llama-3.2-3b"):
         peft_params = LoraConfig(
             lora_alpha=16,  # LoRA 스케일링 팩터
             lora_dropout=0.1,  # LoRA 드롭아웃 비율
-            r=64,  # LoRA 랭크
+            r=16,  # LoRA 랭크
             bias="none",  
             task_type="CAUSAL_LM",
             target_modules=["q_proj", "k_proj"]
@@ -218,17 +217,17 @@ def train_model(model_config):
     # Training arguments
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
-        evaluation_strategy="steps",
-        eval_steps=200,
+        eval_strategy="steps",
+        eval_steps=300,
         learning_rate=2e-5,
         per_device_train_batch_size=8,  # 배치 크기 증가
-        per_device_eval_batch_size=8,  # 배치 크기 증가
-        gradient_accumulation_steps=2,  # 축적 단계 감소
-        num_train_epochs=2,
+        per_device_eval_batch_size=1,  # 배치 크기 증가
+        gradient_accumulation_steps=4,  # 축적 단계 감소
+        num_train_epochs=3,
         weight_decay=0.01,
         save_total_limit=3,
         save_strategy="steps",
-        save_steps=400,
+        save_steps=600,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
         fp16=True,  # FP16으로 전환
@@ -238,8 +237,9 @@ def train_model(model_config):
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         report_to="none",
-        gradient_checkpointing=False,  # 체크포인팅 비활성화
+        gradient_checkpointing=True,  # 체크포인팅 비활성화
         optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
+        eval_accumulation_steps=10
     )
 
     def compute_metrics(p):
@@ -247,7 +247,7 @@ def train_model(model_config):
         predictions = np.argmax(predictions, axis=1)
         
         accuracy = accuracy_score(labels, predictions)
-        precision, recall, f1, _ = precision_recall_f1_support(labels, predictions, average="macro", zero_division=0)
+        precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average="macro", zero_division=0)
         
         return {
             "accuracy": accuracy,
@@ -286,8 +286,10 @@ def train_model(model_config):
 # Evaluation function
 def evaluate_model(model, tokenizer, model_config):
     """Evaluate the model on KLUE-TC metrics."""
+    logger.info("============================================")
     logger.info(f"Evaluating model: {model_config.name}")
-    
+    logger.info("============================================")
+
     with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
         val_data = json.load(f)
     
@@ -332,10 +334,10 @@ def evaluate_model(model, tokenizer, model_config):
     
     # Calculate metrics
     accuracy = accuracy_score(true_labels, pred_labels)
-    precision, recall, f1, _ = precision_recall_f1_support(true_labels, pred_labels, average="macro", zero_division=0)
+    precision, recall, f1, _ = precision_recall_fscore_support(true_labels, pred_labels, average="macro", zero_division=0)
     
     # Per-class metrics
-    precision_per_class, recall_per_class, f1_per_class, support_per_class = precision_recall_f1_support(
+    precision_per_class, recall_per_class, f1_per_class, support_per_class = precision_recall_fscore_support(
         true_labels, pred_labels, average=None, zero_division=0
     )
     per_class_metrics = {

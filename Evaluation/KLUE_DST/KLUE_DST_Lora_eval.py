@@ -4,6 +4,8 @@ import logging
 import os
 import re
 from tqdm import tqdm
+from datasets import Dataset
+
 
 # Third-party imports
 import numpy as np
@@ -22,14 +24,12 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    BitsAndBytesConfig,
-    DataCollatorForLanguageModeling,
     Trainer,
-    TrainingArguments,
-    EarlyStoppingCallback,
-    TrainerCallback
-)
+    TrainingArguments
+    )
+
 from trl import SFTTrainer, SFTConfig
+
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,12 +50,12 @@ MODEL_CONFIGS = [
     #     output_dir="klue_dst_results/lora-olmo1B-org-klue-dst",
     #     is_local=False
     # ),
-    ModelConfig(
-        name="lora-OLMo-1b", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-        output_dir="klue_dst_results/lora-olmo1B-v12-klue-dst",
-        is_local=True
-    ),
+    # ModelConfig(
+    #     name="lora-OLMo-1b", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+    #     output_dir="klue_dst_results/lora-olmo1B-v12-klue-dst",
+    #     is_local=True
+    # ),
     # ModelConfig(
     #     name="lora-OLMo-7b-org", 
     #     model_path="allenai/OLMo-7B", 
@@ -69,7 +69,7 @@ MODEL_CONFIGS = [
     #     is_local=True
     # ),
         ModelConfig(
-        name="lora-Llama-3.2:3B", 
+        name="lora-Llama-3.2-3b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
         output_dir="klue_dst_results/lora-llama3.2-3b-klue-dst",
         is_local=True
@@ -80,99 +80,8 @@ MODEL_CONFIGS = [
 DATA_CACHE_DIR = "./klue_dst_origin_cache"
 JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dst_train.json"
 JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dst_validation.json"
-MAX_LENGTH = 768  # DST는 대화 컨텍스트가 더 길 수 있으므로 길이 증가
+MAX_LENGTH = 512  # DST는 대화 컨텍스트가 더 길 수 있으므로 길이 증가
 MAX_TRAIN_SAMPLES = 300000
-MAX_EVAL_SAMPLES = 500
-
-# 데이터셋 준비 함수 - JSON 파일 생성
-def prepare_dataset_json():
-    """KLUE DST 데이터셋을 불러와서 JSON 파일로 변환합니다.
-    이미 분할된 JSON_TRAIN_DATASET_PATH와 JSON_VAL_DATASET_PATH 파일을 사용합니다.
-    """
-    try:
-        # 학습 데이터 로드
-        logger.info("Loading KLUE DST training dataset from JSON file...")
-        with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
-            train_raw = json.load(f)
-
-        # 검증 데이터 로드
-        logger.info("Loading KLUE DST validation dataset from JSON file...")
-        with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
-            val_raw = json.load(f)
-
-        train_samples = []
-        val_samples = []
-
-        # 프롬프트와 완성 텍스트 생성 함수
-        def create_prompt(dialogue_history, current_utterance):
-            history_text = ""
-            for turn in dialogue_history:
-                if turn["role"] == "user":
-                    history_text += f"사용자: {turn['text']}\n"
-                else:
-                    history_text += f"시스템: {turn['text']}\n"
-            return (
-                "다음은 사용자와 시스템 간의 대화입니다. 마지막 사용자 발화에 대한 대화 상태를 추적하세요.\n\n"
-                f"{history_text}사용자: {current_utterance}\n\n대화 상태:"
-            )
-
-        def create_completion(state):
-            if not state:
-                return " 없음"
-            else:
-                return " " + ", ".join(state)
-
-        # 학습 데이터 전처리
-        logger.info("Creating training samples...")
-        for dialogue in tqdm(train_raw):
-            dialogue_history = []
-            for turn in dialogue["dialogue"]:
-                # 사용자 발화만 처리
-                if turn["role"] == "user":
-                    current_utterance = turn["text"]
-                    state = turn["state"]
-                    prompt = create_prompt(dialogue_history, current_utterance)
-                    completion = create_completion(state)
-                    sample = {
-                        "input": prompt,
-                        "output": completion
-                    }
-                    train_samples.append(sample)
-                dialogue_history.append(turn)
-
-        # 검증 데이터 전처리
-        logger.info("Creating validation samples...")
-        for dialogue in tqdm(val_raw):
-            dialogue_history = []
-            for turn in dialogue["dialogue"]:
-                # 사용자 발화만 처리
-                if turn["role"] == "user":
-                    current_utterance = turn["text"]
-                    state = turn["state"]
-                    prompt = create_prompt(dialogue_history, current_utterance)
-                    completion = create_completion(state)
-                    sample = {
-                        "input": prompt,
-                        "output": completion
-                    }
-                    val_samples.append(sample)
-                dialogue_history.append(turn)
-
-        # 전처리된 학습 데이터 저장
-        logger.info(f"Saving processed training dataset... (samples: {len(train_samples)})")
-        with open(JSON_TRAIN_DATASET_PATH, "w", encoding="utf-8") as f:
-            json.dump(train_samples, f, ensure_ascii=False, indent=2)
-
-        # 전처리된 검증 데이터 저장
-        logger.info(f"Saving processed validation dataset... (samples: {len(val_samples)})")
-        with open(JSON_VAL_DATASET_PATH, "w", encoding="utf-8") as f:
-            json.dump(val_samples, f, ensure_ascii=False, indent=2)
-
-        logger.info(f"Processed KLUE DST datasets saved to: {JSON_TRAIN_DATASET_PATH} and {JSON_VAL_DATASET_PATH}")
-
-    except Exception as e:
-        logger.error(f"Error creating DST datasets: {e}")
-        raise
 
 # 모델 및 토크나이저 로드 함수
 def load_model_and_tokenizer(model_config):
@@ -205,9 +114,46 @@ def load_model_and_tokenizer(model_config):
     
     return model, tokenizer
 
-# 메인 학습 함수
+# Modify preprocess function to accept the tokenizer
+def preprocess(example, tokenizer):
+    # 입력과 출력을 결합하여 토큰화
+    combined_text = example["input"] + example["output"]
+    
+    encoding = tokenizer(
+        combined_text,
+        truncation=True,
+        max_length=MAX_LENGTH,
+        padding="max_length",
+        return_tensors="pt"
+    )
+    
+    # 입력 부분만 있는 인코딩도 생성
+    input_encoding = tokenizer(
+        example["input"],
+        truncation=True,
+        max_length=MAX_LENGTH,
+        return_tensors="pt"
+    )
+    
+    # 입력 길이를 구함
+    input_length = input_encoding["input_ids"].shape[1]
+    
+    # labels 배열 생성: 입력 부분은 -100으로 마스킹(loss 계산에서 제외)
+    labels = encoding["input_ids"].clone()
+    labels[0, :input_length] = -100
+    
+    return {
+        "input_ids": encoding["input_ids"].squeeze(0),
+        "attention_mask": encoding["attention_mask"].squeeze(0),
+        "labels": labels.squeeze(0)
+    }
+
+# Then, in the `train_model` function, pass the tokenizer to preprocess
 def train_model(model_config):
-    # 1. 원본 데이터 로드
+    # Load the model and tokenizer
+    model, tokenizer = load_model_and_tokenizer(model_config)
+
+    # Load the training data
     with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
         full_train_data = json.load(f)  # 전체 훈련 데이터
 
@@ -217,13 +163,19 @@ def train_model(model_config):
         random_state=42,  # 재현성 보장
         shuffle=True
     )
+
+    # Convert the train and validation data into Dataset objects
+    train_data = Dataset.from_list(train_data)
+    val_data = Dataset.from_list(val_data)
+
+    # Apply preprocessing by passing tokenizer as an argument
+    train_data = train_data.map(lambda x: preprocess(x, tokenizer))
+    val_data = val_data.map(lambda x: preprocess(x, tokenizer))
+
     logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
-    
-    # 모델 및 토크나이저 로드
-    model, tokenizer = load_model_and_tokenizer(model_config)
 
     # 데이터 샘플 확인
-    logger.info(f"Sample train data: {train_dataset[0]}")
+    # logger.info(f"Sample train data: {train_data[0]}")
     
     # LoRA 설정 추가 (OLMo에 맞게 수정 필요)
     peft_params = LoraConfig(
@@ -234,7 +186,7 @@ def train_model(model_config):
         task_type="CAUSAL_LM",
         target_modules=["att_proj", "attn_out"]  # OLMo 확인 후 조정
     )
-    if model_config.name == "lora-Llama-3.2:3B":
+    if (model_config.name == "lora-Llama-3.2-3b"):
         peft_params = LoraConfig(
             lora_alpha=8,
             lora_dropout=0.05,
@@ -270,7 +222,7 @@ def train_model(model_config):
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         report_to="none",
-        gradient_checkpointing=True,  # 체크포인팅 비활성화
+        gradient_checkpointing=False,  # 체크포인팅 비활성화
         optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
     )
 
@@ -365,7 +317,7 @@ def evaluate_model(model, tokenizer, model_config):
 
     # 검증 데이터 로드
     with open(JSON_VAL_DATASET_PATH, "r", encoding="utf-8") as f:
-        val_data = json.load(f)[:MAX_EVAL_SAMPLES]  # 평가 샘플 제한
+        val_data = json.load(f)[:1000] # 평가 샘플 제한
     
     model.eval()
     
@@ -471,27 +423,27 @@ if __name__ == "__main__":
         # 출력 디렉토리 생성
         os.makedirs(model_config.output_dir, exist_ok=True)
         os.makedirs(DATA_CACHE_DIR, exist_ok=True)
-        
+        logger.info("===============================")
         logger.info(f"Starting training for {model_config.name}")
-        
+        logger.info("===============================")
         try:
             # 모델 학습
-            # model, tokenizer = train_model(model_config)
+            model, tokenizer = train_model(model_config)
             
-            ##########
+            ########## 튜닝된 모델 eval 할때
             # 1. 기본 모델과 토크나이저 로드
-            base_model, tokenizer = load_model_and_tokenizer(model_config)
+            # base_model, tokenizer = load_model_and_tokenizer(model_config)
             
-            # 2. PEFT 모델 경로 설정
-            peft_model_path = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DST/klue_dst_results/lora-olmo1B-org-klue-dst/final"
+            # # 2. PEFT 모델 경로 설정
+            # peft_model_path = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DST/klue_dst_results/lora-olmo1B-v12-klue-dst/final"
             
-            # 3. PEFT 모델 로드 (어댑터만 추가)
-            model = PeftModel.from_pretrained(
-                base_model,
-                peft_model_path,
-                torch_dtype=torch.bfloat16,
-                device_map="auto"
-            )
+            # # 3. PEFT 모델 로드 (어댑터만 추가)
+            # model = PeftModel.from_pretrained(
+            #     base_model,
+            #     peft_model_path,
+            #     torch_dtype=torch.bfloat16,
+            #     device_map="auto"
+            # )
             ###########
             # 모델 평가
             evaluate_model(model, tokenizer, model_config)
