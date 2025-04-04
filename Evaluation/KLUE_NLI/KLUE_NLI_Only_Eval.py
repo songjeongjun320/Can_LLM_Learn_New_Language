@@ -156,12 +156,8 @@ def evaluate_model(model, tokenizer, model_config):
         logger.error(f"Error decoding JSON from: {JSON_VAL_DATASET_PATH}")
         return None
 
-    if MAX_EVAL_SAMPLES is not None and MAX_EVAL_SAMPLES > 0:
-        val_subset = val_data[:MAX_EVAL_SAMPLES]
-        logger.info(f"Using a subset of {len(val_subset)} samples for evaluation.")
-    else:
-        val_subset = val_data
-        logger.info("Using the full validation dataset.")
+    val_subset = val_data
+    logger.info("Using the full validation dataset.")
 
     if not val_subset:
         logger.warning("Validation subset is empty. Skipping evaluation.")

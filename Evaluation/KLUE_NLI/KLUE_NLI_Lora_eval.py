@@ -223,9 +223,9 @@ def train_model(model_config):
         format_val_func = lambda ex: format_nli_prompt(ex, tokenizer, include_answer=True)
         val_dataset = raw_val_dataset.map(format_val_func, remove_columns=raw_val_dataset.column_names)
         # 평가 샘플 수 제한 (필요 시)
-        if MAX_EVAL_SAMPLES and MAX_EVAL_SAMPLES > 0 and len(val_dataset) > MAX_EVAL_SAMPLES:
-            val_dataset = val_dataset.select(range(MAX_EVAL_SAMPLES))
-            logger.info(f"Limited validation set for loss calculation to {len(val_dataset)} samples.")
+        # if MAX_EVAL_SAMPLES and MAX_EVAL_SAMPLES > 0 and len(val_dataset) > MAX_EVAL_SAMPLES:
+        #     val_dataset = val_dataset.select(range(MAX_EVAL_SAMPLES))
+        #     logger.info(f"Limited validation set for loss calculation to {len(val_dataset)} samples.")
     else:
         val_dataset = None
 
@@ -334,16 +334,8 @@ def evaluate_model(model, tokenizer, model_config):
         logger.error(f"Failed to load validation data for evaluation: {e}")
         return None
 
-    if MAX_EVAL_SAMPLES is not None and MAX_EVAL_SAMPLES > 0:
-        val_subset = val_data[:MAX_EVAL_SAMPLES]
-        logger.info(f"Using a subset of {len(val_subset)} samples for evaluation.")
-    else:
-        val_subset = val_data
-        logger.info("Using the full validation dataset for evaluation.")
-
-    if not val_subset:
-        logger.warning("Validation subset is empty. Skipping evaluation.")
-        return None
+    val_subset = val_data
+    logger.info("Using the full validation dataset for evaluation.")
 
     # 모델을 평가 모드로 설정
     model.eval()
@@ -505,37 +497,115 @@ def evaluate_model(model, tokenizer, model_config):
 
 
 # Main execution
+# 메인 실행 함수
 if __name__ == "__main__":
-    logger.info("Starting KLUE-NLI Prompt-based training and evaluation")
+    # 작업 유형에 맞게 로그 메시지 수정 (예: KLUE-NLI)
+    logger.info("Starting KLUE-NLI processing") # <-- 작업 이름에 맞게 수정하세요
+
+    # <<< CONTROL FLAG >>>
+    # Set to True to skip training and ONLY run evaluation using pre-trained adapters.
+    # Assumes adapters are saved in 'model_config.output_dir / final'.
+    # Set to False to run training first, then evaluation.
+    EVAL_ONLY = True # <-- 이 값을 True 또는 False로 변경하세요
+
+    if EVAL_ONLY:
+        logger.info(">>> Running in EVALUATION-ONLY mode <<<")
+        logger.info(">>> Training step will be SKIPPED. Attempting to load adapters... <<<")
+    else:
+        logger.info(">>> Running in TRAINING and EVALUATION mode <<<")
 
     all_results = {}
 
+    # --- 단일 루프 시작 ---
     for model_config in MODEL_CONFIGS:
         logger.info(f"Processing model: {model_config.name}")
 
-        trained_model = None # 변수 초기화
-        trained_tokenizer = None
+        # 변수 초기화
+        model_for_eval = None
+        tokenizer_for_eval = None
         eval_results = None
+        base_model = None # EVAL_ONLY 모드용
+        base_tokenizer = None # EVAL_ONLY 모드용
 
         try:
             os.makedirs(model_config.output_dir, exist_ok=True)
+            # NLI 태스크의 경우 데이터 캐시 디렉토리가 필요하면 생성
+            # os.makedirs(DATA_CACHE_DIR, exist_ok=True) # 필요 시 주석 해제
 
-            # Train the model
-            trained_model, trained_tokenizer = train_model(model_config)
+            # --- EVAL_ONLY 플래그에 따른 분기 ---
+            if EVAL_ONLY:
+                # --- Evaluation-Only Mode ---
+                logger.info(f"Attempting to load model and adapter for evaluation-only: {model_config.name}")
 
-            if trained_model and trained_tokenizer:
-                logger.info(f"Training successful for {model_config.name}. Starting evaluation...")
-                # Evaluate the trained model
-                eval_results = evaluate_model(trained_model, trained_tokenizer, model_config)
+                # 1. Load the base model and tokenizer
+                logger.info("Loading base model and tokenizer...")
+                # load_model_and_tokenizer는 해당 작업에 맞는 함수 사용 가정
+                base_model, base_tokenizer = load_model_and_tokenizer(model_config)
+                tokenizer_for_eval = base_tokenizer # 토크나이저는 기본 토크나이저 사용
+
+                # 2. Define the path to the pre-trained adapter
+                # train_model에서 저장하는 경로와 일치해야 함 (보통 'final')
+                adapter_path = os.path.join(model_config.output_dir, "final")
+                logger.info(f"Looking for pre-trained adapter at: {adapter_path}")
+
+                # 3. Check if the adapter directory exists and load the PEFT model
+                if os.path.isdir(adapter_path): # 디렉토리 존재 확인
+                    try:
+                        logger.info(f"Loading PEFT adapter from {adapter_path}...")
+                        # 기본 모델 위에 어댑터 로드
+                        # 필요한 경우 torch_dtype 등 옵션 추가
+                        peft_model = PeftModel.from_pretrained(
+                            base_model,
+                            adapter_path,
+                            # torch_dtype=torch.bfloat16 # 필요 시 기본 모델과 맞춤
+                        )
+                        logger.info("PEFT adapter loaded successfully onto the base model.")
+                        model_for_eval = peft_model # 평가에 사용할 모델
+
+                    except Exception as e:
+                        logger.error(f"Failed to load PEFT adapter from {adapter_path}: {e}")
+                        logger.exception("Adapter loading failed. Skipping evaluation for this model.")
+                        # 실패 시 리소스 정리
+                        if base_model: del base_model
+                        if base_tokenizer: del base_tokenizer
+                        base_model, base_tokenizer = None, None
+                else:
+                    logger.warning(f"Adapter directory not found at {adapter_path}. Skipping evaluation for {model_config.name}.")
+                    # 어댑터 없으면 리소스 정리
+                    if base_model: del base_model
+                    if base_tokenizer: del base_tokenizer
+                    base_model, base_tokenizer = None, None
+
+            else: # if not EVAL_ONLY:
+                # --- Training and Evaluation Mode ---
+                logger.info(f"Starting training for {model_config.name}...")
+                # train_model은 학습된 PEFT 모델 객체와 토크나이저를 반환해야 함
+                # train_model 함수는 해당 작업(NLI)에 맞게 구현되어 있어야 함
+                trained_peft_model, trained_tokenizer = train_model(model_config)
+
+                if trained_peft_model and trained_tokenizer:
+                    logger.info(f"Training successful for {model_config.name}.")
+                    model_for_eval = trained_peft_model
+                    tokenizer_for_eval = trained_tokenizer
+                else:
+                    logger.warning(f"Training failed or returned None for {model_config.name}. Skipping evaluation.")
+
+            # --- Perform Evaluation (if model and tokenizer are ready) ---
+            if model_for_eval and tokenizer_for_eval:
+                logger.info(f"Starting evaluation for {model_config.name}...")
+                # evaluate_model 함수는 해당 작업(NLI)에 맞게 구현되어 있어야 함
+                # 필요한 경우 배치 크기 등의 인자 전달 (예: evaluate_model(..., eval_batch_size=8))
+                eval_results = evaluate_model(model_for_eval, tokenizer_for_eval, model_config)
 
                 if eval_results:
-                    all_results[model_config.name] = eval_results
+                    # 결과를 JSON으로 저장하기 전에 numpy 타입을 float으로 변환 (필요 시)
+                    serializable_results = {k: float(v) if isinstance(v, (np.generic, np.ndarray)) else v for k, v in eval_results.items()}
+                    all_results[model_config.name] = serializable_results
                     logger.info(f"Stored evaluation results for {model_config.name}")
                 else:
                     logger.warning(f"Evaluation failed or produced no results for {model_config.name}")
             else:
-                 logger.warning(f"Training failed for {model_config.name}. Skipping evaluation.")
-
+                logger.warning(f"Model or tokenizer not available for evaluation for {model_config.name}. Skipping evaluation step.")
 
             logger.info(f"Completed processing for {model_config.name}")
 
@@ -543,27 +613,59 @@ if __name__ == "__main__":
             logger.error(f"Unhandled error processing {model_config.name}: {str(e)}")
             logger.exception("Exception details:")
         finally:
-            # 메모리 정리
-            if 'trained_model' in locals() and trained_model is not None:
-                del trained_model
-            if 'trained_tokenizer' in locals() and trained_tokenizer is not None:
-                del trained_tokenizer
-            if 'eval_results' in locals(): del eval_results
-            # Trainer 객체도 메모리를 차지할 수 있으므로 명시적 삭제 고려
-            # if 'trainer' in locals(): del trainer
+            # --- Memory Cleanup (루프 내에서 각 모델 처리 후 실행) ---
+            logger.info(f"Cleaning up resources for {model_config.name}...")
+            if model_for_eval is not None:
+                # PeftModel 객체 자체를 삭제
+                del model_for_eval
+                model_for_eval = None
+            if tokenizer_for_eval is not None:
+                 # EVAL_ONLY 모드에서는 base_tokenizer와 같을 수 있으므로 아래에서 base 삭제 시 처리됨
+                 # Training 모드에서는 독립적이므로 여기서 삭제
+                 if not EVAL_ONLY and 'trained_tokenizer' in locals():
+                    del trained_tokenizer # 명시적 삭제
+                 tokenizer_for_eval = None # 참조 제거
+
+            # EVAL_ONLY 모드에서 로드한 base 모델/토크나이저 삭제
+            if EVAL_ONLY and base_model is not None:
+                 del base_model
+                 base_model = None
+            if EVAL_ONLY and base_tokenizer is not None:
+                 del base_tokenizer
+                 base_tokenizer = None
+
+            # 학습 모드에서 생성된 로컬 변수 명시적 삭제 (참조 카운트 감소)
+            if not EVAL_ONLY:
+                if 'trained_peft_model' in locals(): del trained_peft_model
+                # 'trained_tokenizer'는 위에서 처리
+                if 'trainer' in locals(): del trainer # trainer 객체가 train_model 스코프 밖에서 생성/사용되지 않았다면 불필요
+
+            if eval_results is not None:
+                del eval_results
+                eval_results = None
+
+            # GPU 캐시 비우기
             torch.cuda.empty_cache()
-            logger.info(f"Cleaned up resources for {model_config.name}")
+            logger.info(f"Finished cleaning up resources for {model_config.name}")
+    # --- 단일 루프 끝 ---
 
 
-    # Save combined results
-    combined_results_path = "klue_nli_results/combined_prompt_eval_results.json" # 결과 파일명 변경
+    # Save combined results (루프 완료 후 최종 결과 저장)
+    # 결과 파일 경로 수정 (예: KLUE-NLI)
+    combined_results_path = "klue_nli_results/combined_eval_results.json" # <-- 작업 이름과 모드에 맞게 수정
     os.makedirs(os.path.dirname(combined_results_path), exist_ok=True)
 
     try:
+        # all_results에 numpy 타입이 있을 경우 float으로 변환
+        serializable_all_results = {}
+        for model_name, results in all_results.items():
+             serializable_all_results[model_name] = {k: float(v) if isinstance(v, (np.generic, np.ndarray)) else v for k, v in results.items()}
+
         with open(combined_results_path, "w", encoding="utf-8") as f:
-            json.dump(all_results, f, ensure_ascii=False, indent=2)
+            json.dump(serializable_all_results, f, ensure_ascii=False, indent=2)
         logger.info(f"All evaluation results saved to: {combined_results_path}")
     except Exception as e:
         logger.error(f"Failed to save combined results to {combined_results_path}: {e}")
 
-    logger.info("KLUE-NLI Prompt-based training and evaluation completed")
+    # 작업 유형에 맞게 로그 메시지 수정
+    logger.info("KLUE-NLI processing completed") # <-- 작업 이름에 맞게 수정
