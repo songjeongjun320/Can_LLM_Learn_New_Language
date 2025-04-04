@@ -16,6 +16,10 @@ unique_translated_words = {}
 removed_entries = []
 
 for korean_word, english_word in translated_words.items():
+    # 소문자로 변환
+    korean_word = korean_word.lower()
+    english_word = english_word.lower()
+
     if korean_word not in unique_translated_words:
         unique_translated_words[korean_word] = english_word
     else:
