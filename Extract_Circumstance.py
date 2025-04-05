@@ -5,7 +5,7 @@
 import requests
 import ollama
 # Ollama 서버 설정
-ollama_host = "http://sg041:11434"
+ollama_host = "http://sg032:11434"
 client = ollama.Client(host=ollama_host)  # 클라이언트 인스턴스 생성
 
 prompt = """Analyze the given Circumstance and describe the specific actions and interactions of the people in this circumstance.
@@ -349,10 +349,8 @@ def process(base_path, drama_folder_name, version):
 base_path = "/scratch/jsong132/Can_LLM_Learn_New_Language/DB"
 version = "v2"
 
-process(base_path, "절대로 놓치면 안 되는 여자 몰아보기", version)
-process(base_path, "지푸라기 잡는 심정으로 유명한 철학관에 간 사연", version)
-process(base_path, "짧게 2시간 45분 동안 말해서", version)
-process(base_path, "취향이 정반대인 부부의 2박 3일 마카오 여행", version)
-process(base_path, "친구 몰아보기", version)
 process(base_path, "친구 몰아보기2", version)
 process(base_path, "픽고 몰아보기 4", version)
+process(base_path, "픽고 몰아보기 5", version)
+process(base_path, "픽고 몰아보기 6", version)
+process(base_path, "픽고 몰아보기 7", version)

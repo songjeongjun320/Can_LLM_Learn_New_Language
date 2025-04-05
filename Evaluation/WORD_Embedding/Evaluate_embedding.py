@@ -4,7 +4,7 @@ import logging
 import os
 import gc
 from dataclasses import dataclass # <--- Import dataclass
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Literal
 import statistics
 import traceback
 
@@ -12,7 +12,7 @@ import traceback
 import numpy as np
 import torch
 import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel
 from tqdm import tqdm
 
 # Configure logging
@@ -25,34 +25,71 @@ class ModelConfig:
     name: str
     model_path: str
     is_local: bool
+    model_type: Literal["causal", "encoder", "encoder-decoder"] = "causal"
 
 # --- Updated MODEL_CONFIGS list ---
 MODEL_CONFIGS = [
+    # --- Causal Models ---
+    # ModelConfig(
+    #     name="OLMo-1b-org",
+    #     model_path="allenai/OLMo-1B",
+    #     is_local=False,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="OLMo-1b-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="OLMo-7b-org",
+    #     model_path="allenai/OLMo-7B",
+    #     is_local=False,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="OLMo-7b-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="Llama-3.2-3b",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
+
+    # --- Encoder Model ---
     ModelConfig(
-        name="OLMo-1b-org",
-        model_path="allenai/OLMo-1B",
-        is_local=False
+        name="BERT-base-uncased",
+        model_path="bert-base-uncased",
+        is_local=False,
+        model_type="encoder" # <-- Specify type
+    ),
+
+    # --- Encoder-Decoder Model ---
+    ModelConfig(
+        name="T5-base",
+        model_path="t5-base",
+        is_local=False,
+        model_type="encoder-decoder" # <-- Specify type
     ),
     ModelConfig(
-        name="OLMo-1b-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B",
-        is_local=True
+        name="Full_BERT-base-uncased",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_BERT-base-uncased",
+        is_local=False,
+        model_type="encoder" # <-- Specify type
     ),
+
+    # --- Encoder-Decoder Model ---
     ModelConfig(
-        name="OLMo-7b-org",
-        model_path="allenai/OLMo-7B",
-        is_local=False
+        name="Full_T5-base-Tuned",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_T5-base-Tuned",
+        is_local=False,
+        model_type="encoder-decoder" # <-- Specify type
     ),
-    ModelConfig(
-        name="OLMo-7b-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B",
-        is_local=True
-    ),
-    ModelConfig(
-        name="Llama-3.2-3b",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
-        is_local=True
-    )
 ]
 
 # --- Configuration ---
@@ -60,61 +97,100 @@ WORD_PAIRS_PATH = '/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/WORD_
 INDIVIDUAL_RESULTS_FOLDER = 'embedding_results'
 COMBINED_RESULTS_PATH = 'combined_word_embedding_results.json'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-SAFE_MAX_LENGTH = 2048 # Define a reasonable max length for tokenization
+SAFE_MAX_LENGTH = 512  # Define a reasonable max length for tokenization
 NUM_SAMPLES = 5282
 
 os.makedirs(INDIVIDUAL_RESULTS_FOLDER, exist_ok=True)
 logger.info(f"Using device: {DEVICE}")
 
 # --- Helper Function to Get Word Embedding (with explicit max_length) ---
-def get_word_embedding(model, tokenizer, word, device, max_len):
+def get_word_embedding(model, tokenizer, word, device, max_len, model_type: str):
     """
     Gets the average embedding of the last hidden state for a given word.
-    Uses an explicit max_length and includes detailed traceback logging.
+    Handles different model types, specifically calling only the encoder for T5.
     """
     if not word:
         logger.warning("Skipping empty word.")
         return None
     try:
-        # Use the provided explicit max_len instead of tokenizer.model_max_length
         inputs = tokenizer(
             word,
             return_tensors="pt",
             truncation=True,
-            max_length=max_len # <--- Use explicit max_len
+            max_length=max_len
         ).to(device)
 
         if inputs.input_ids.shape[1] == 0:
             logger.warning(f"Tokenization of '{word}' resulted in empty input_ids. Skipping.")
             return None
-        # No need to check against tokenizer.model_max_length here
 
         with torch.no_grad():
-            # *** Explicitly pass input_ids and attention_mask ***
-            # Check if attention_mask exists in inputs, pass if it does
             model_inputs = {
                 "input_ids": inputs['input_ids'],
+                "attention_mask": inputs.get('attention_mask'), # Use .get for safety
+                # Request hidden states for all types, though we might use last_hidden_state directly
                 "output_hidden_states": True
             }
-            if 'attention_mask' in inputs:
-                 model_inputs['attention_mask'] = inputs['attention_mask']
+            # Remove None attention mask if tokenizer didn't provide one
+            if model_inputs["attention_mask"] is None:
+                del model_inputs["attention_mask"]
 
-            outputs = model(**model_inputs) # <--- Pass the curated dictionary
+            # --- *** Conditional Model Execution *** ---
+            if model_type == "encoder-decoder":
+                # For T5 (and potentially other enc-dec models loaded with AutoModel),
+                # call ONLY the encoder part.
+                # We pass the regular 'input_ids' and 'attention_mask' intended for the encoder.
+                outputs = model.encoder(**{k: v for k, v in model_inputs.items() if k in ['input_ids', 'attention_mask', 'output_hidden_states']}) # Pass relevant args
+                # The encoder output usually directly contains 'last_hidden_state'
+                if hasattr(outputs, 'last_hidden_state'):
+                    last_hidden_state = outputs.last_hidden_state
+                elif hasattr(outputs, 'hidden_states'): # Fallback if needed
+                     last_hidden_state = outputs.hidden_states[-1]
+                else:
+                    logger.error(f"Could not retrieve last_hidden_state or hidden_states from encoder for word '{word}'.")
+                    return None
+            elif model_type == "encoder":
+                 # For BERT-like models loaded with AutoModel
+                 outputs = model(**model_inputs)
+                 if hasattr(outputs, 'last_hidden_state'):
+                     last_hidden_state = outputs.last_hidden_state
+                 elif hasattr(outputs, 'hidden_states'): # Fallback
+                     last_hidden_state = outputs.hidden_states[-1]
+                 else:
+                     logger.error(f"Could not retrieve hidden_states from encoder model for word '{word}'.")
+                     return None
+            elif model_type == "causal":
+                 # For CausalLM models loaded with AutoModelForCausalLM
+                 outputs = model(**model_inputs)
+                 if hasattr(outputs, 'hidden_states') and outputs.hidden_states:
+                     last_hidden_state = outputs.hidden_states[-1]
+                 else:
+                      logger.error(f"Could not retrieve hidden_states from causal model for word '{word}'.")
+                      return None
+            else:
+                logger.error(f"Unsupported model_type '{model_type}' for word '{word}'.")
+                return None
+            # --- End Conditional Model Execution ---
 
-        if not outputs.hidden_states:
-             logger.error(f"Could not retrieve hidden states for word '{word}'.")
-             return None
-        last_hidden_state = outputs.hidden_states[-1]
 
-        if 'attention_mask' in inputs:
-            mask = inputs.attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
-            sum_embeddings = torch.sum(last_hidden_state * mask, dim=1)
-            sum_mask = torch.clamp(mask.sum(dim=1), min=1e-9)
-            embedding = sum_embeddings / sum_mask
-        else:
-             embedding = last_hidden_state.mean(dim=1)
+            # --- Averaging using attention mask (if available) ---
+            attention_mask = inputs.get('attention_mask')
+            if attention_mask is not None and last_hidden_state is not None: # Check last_hidden_state is not None
+                mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+                sum_embeddings = torch.sum(last_hidden_state * mask, dim=1)
+                sum_mask = torch.clamp(mask.sum(dim=1), min=1e-9) # Avoid division by zero
+                embedding = sum_embeddings / sum_mask
+            elif last_hidden_state is not None: # Check last_hidden_state is not None
+                 # If no attention mask, just average all tokens (less ideal for padded sequences)
+                 logger.warning(f"No attention mask found for word '{word}'. Averaging all tokens.")
+                 embedding = last_hidden_state.mean(dim=1)
+            else:
+                 # This case should ideally not be reached if checks above work
+                 logger.error(f"Cannot compute embedding as last_hidden_state is None for word '{word}'.")
+                 return None
 
-        return embedding.squeeze(0)
+
+        return embedding.squeeze(0) # Remove batch dimension
 
     except Exception as e:
         error_type = type(e).__name__
@@ -170,16 +246,29 @@ for config in MODEL_CONFIGS:
         original_max_len = getattr(tokenizer, 'model_max_length', 'N/A')
         logger.info(f"Tokenizer original model_max_length: {original_max_len}")
 
-        if tokenizer.pad_token is None:
+        if tokenizer.pad_token is None and hasattr(tokenizer, 'eos_token') and tokenizer.eos_token is not None:
             tokenizer.pad_token = tokenizer.eos_token
-            logger.info("Added EOS token as PAD token.")
+            logger.info("Set EOS token as PAD token.")
+        elif tokenizer.pad_token is None:
+             logger.warning(f"Tokenizer for {config.name} does not have a pad_token or eos_token. Padding might behave unexpectedly.")
 
-        logger.info(f"Loading model from: {config.model_path} using AutoModelForCausalLM (using float32)...")
-        loaded_object = AutoModelForCausalLM.from_pretrained(
+        # --- Select appropriate AutoModel class ---
+        logger.info(f"Loading model from: {config.model_path} using appropriate AutoModel class (float32)...")
+        if config.model_type == "causal":
+            ModelClass = AutoModelForCausalLM
+        elif config.model_type == "encoder" or config.model_type == "encoder-decoder":
+             # Use AutoModel to get base embeddings for both encoder and enc-dec
+             ModelClass = AutoModel
+        else:
+             logger.error(f"Unknown model_type '{config.model_type}' for {config.name}. Skipping.")
+             raise ValueError(f"Unknown model_type: {config.model_type}")
+
+        loaded_object = ModelClass.from_pretrained(
             config.model_path,
             trust_remote_code=True,
-            # torch_dtype=torch.bfloat16, # Keep using float32
-            local_files_only=config.is_local
+            # torch_dtype=torch.float32, # Default is float32
+            local_files_only=config.is_local,
+            output_hidden_states=True # Ensure hidden states are outputted by default if possible
         )
 
         logger.info(f"Type of loaded object from {config.model_path}: {type(loaded_object)}")
@@ -187,13 +276,24 @@ for config in MODEL_CONFIGS:
              logger.error(f"Failed to load model correctly from {config.model_path}. Received type: {type(loaded_object)}")
              raise TypeError(f"Expected a PyTorch model from {config.model_path}, but got {type(loaded_object)}")
 
-        logger.info(f"Moving model from {config.model_path} to device: {DEVICE}...")
         model = loaded_object.to(DEVICE)
         logger.info(f"Model from {config.model_path} successfully moved to {DEVICE}.")
 
-        if tokenizer.pad_token_id is None and hasattr(tokenizer, 'eos_token_id'):
-             if hasattr(model, 'config') and model.config is not None: model.config.pad_token_id = tokenizer.eos_token_id
-             else: logger.warning(f"Could not set pad_token_id on model config for {config.model_path}.")
+        # Set pad_token_id in model config if tokenizer has pad_token_id
+        if tokenizer.pad_token_id is not None:
+            if hasattr(model, 'config') and model.config is not None:
+                model.config.pad_token_id = tokenizer.pad_token_id
+                logger.info(f"Set model.config.pad_token_id to {tokenizer.pad_token_id}")
+            else:
+                logger.warning(f"Could not set pad_token_id on model config for {config.name}.")
+        elif hasattr(tokenizer, 'eos_token_id') and tokenizer.eos_token_id is not None:
+            # Fallback to EOS if PAD is not set but EOS is
+             if hasattr(model, 'config') and model.config is not None:
+                logger.warning(f"Attempting to set model.config.pad_token_id to tokenizer.eos_token_id ({tokenizer.eos_token_id}) as pad_token_id was None.")
+                model.config.pad_token_id = tokenizer.eos_token_id
+             else:
+                logger.warning(f"Could not set pad_token_id using eos_token_id on model config for {config.name}.")
+
         model.eval()
         logger.info(f"Model from {config.model_path} evaluation mode set.")
 
@@ -204,8 +304,8 @@ for config in MODEL_CONFIGS:
             korean_word_lower = korean_word.lower()
             english_word_lower = english_word.lower()
             # Pass SAFE_MAX_LENGTH to the embedding function
-            embedding_k = get_word_embedding(model, tokenizer, korean_word, DEVICE, SAFE_MAX_LENGTH)
-            embedding_e = get_word_embedding(model, tokenizer, english_word, DEVICE, SAFE_MAX_LENGTH)
+            embedding_k = get_word_embedding(model, tokenizer, korean_word, DEVICE, SAFE_MAX_LENGTH, config.model_type)
+            embedding_e = get_word_embedding(model, tokenizer, english_word, DEVICE, SAFE_MAX_LENGTH, config.model_type)
 
             similarity = None
             if embedding_k is not None and embedding_e is not None:
