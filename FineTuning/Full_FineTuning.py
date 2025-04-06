@@ -14,7 +14,11 @@ from transformers import (
     Trainer,
     DataCollatorForLanguageModeling,
     DataCollatorForSeq2Seq, # Added for seq2seq models
+    PreTrainedModel
 )
+from transformers.utils import WEIGHTS_NAME # "pytorch_model.bin"
+from transformers.utils.import_utils import is_peft_available
+
 from dataclasses import dataclass, field
 from typing import Optional
 import functools # Needed for partial function application in map
@@ -181,6 +185,33 @@ def preprocess_seq2seq(examples, tokenizer, max_length):
     model_inputs["labels"] = labels["input_ids"]
     return model_inputs
 
+class CustomTrainer(Trainer):
+    def _save(self, output_dir: Optional[str] = None, state_dict=None):
+        """
+        Saves the model checkpoint using pytorch_model.bin instead of safetensors
+        by explicitly setting safe_serialization=False.
+        """
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        logger.info(f"Saving model checkpoint to {output_dir}")
+
+        # Save the model
+        if not hasattr(self.model, "save_pretrained"):
+             raise ValueError("The model doesn't support save_pretrained functionality.")
+
+        # --- 여기가 핵심: safe_serialization=False 추가 ---
+        self.model.save_pretrained(
+            output_dir,
+            state_dict=state_dict,
+            safe_serialization=False # Force saving in pytorch .bin format
+        )
+        # --- ---
+
+        if self.tokenizer is not None:
+            self.tokenizer.save_pretrained(output_dir)
+
+        # Good practice: save your training arguments together with the trained model
+        torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
 
 # --- Main Execution ---
 if __name__ == "__main__":
@@ -245,8 +276,10 @@ if __name__ == "__main__":
                 "torch_dtype": torch.bfloat16, # Use bfloat16
                 "device_map": "auto" # Distribute across GPUs
             }
-            if config.is_local:
-                 model_load_args["use_safetensors"] = os.path.exists(os.path.join(config.model_path, "model.safetensors"))
+            if config.is_local and os.path.exists(os.path.join(config.model_path, "model.safetensors")):
+                 model_load_args["use_safetensors"] = True
+            elif config.is_local:
+                 model_load_args["use_safetensors"] = False # Prefer .bin if .safetensors doesn't exist locally
 
             model = None
             added_pad_token = False
@@ -324,9 +357,9 @@ if __name__ == "__main__":
                 evaluation_strategy="steps",
                 eval_steps=500,
                 learning_rate=5e-5, # May need tuning per model
-                per_device_train_batch_size=4, # Adjust based on GPU memory
-                per_device_eval_batch_size=4,  # Adjust based on GPU memory
-                gradient_accumulation_steps=8, # Effective batch size = 4 * 8 * num_gpus = 32 * num_gpus
+                per_device_train_batch_size=16, # Adjust based on GPU memory
+                per_device_eval_batch_size=16,  # Adjust based on GPU memory
+                gradient_accumulation_steps=2, # Effective batch size = 4 * 8 * num_gpus = 32 * num_gpus
                 num_train_epochs=3,
                 weight_decay=0.01,
                 save_total_limit=2, # Save fewer checkpoints to save space
@@ -349,7 +382,7 @@ if __name__ == "__main__":
             )
 
             # 6. Initialize Trainer
-            trainer = Trainer(
+            trainer = CustomTrainer(
                 model=model,
                 args=training_args,
                 train_dataset=tokenized_train,

@@ -30,66 +30,75 @@ class ModelConfig:
 # --- Updated MODEL_CONFIGS list ---
 MODEL_CONFIGS = [
     # --- Causal Models ---
-    # ModelConfig(
-    #     name="OLMo-1b-org",
-    #     model_path="allenai/OLMo-1B",
-    #     is_local=False,
-    #     model_type="causal"
-    # ),
-    # ModelConfig(
-    #     name="OLMo-1b-Tuned",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B",
-    #     is_local=True,
-    #     model_type="causal"
-    # ),
-    # ModelConfig(
-    #     name="OLMo-7b-org",
-    #     model_path="allenai/OLMo-7B",
-    #     is_local=False,
-    #     model_type="causal"
-    # ),
-    # ModelConfig(
-    #     name="OLMo-7b-Tuned",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B",
-    #     is_local=True,
-    #     model_type="causal"
-    # ),
+    ModelConfig(
+        name="OLMo-1b-org",
+        model_path="allenai/OLMo-1B",
+        is_local=False,
+        model_type="causal"
+    ),
+    ModelConfig(
+        name="OLMo-1b-Tuned",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B",
+        is_local=True,
+        model_type="causal"
+    ),
+    ModelConfig(
+        name="OLMo-7b-org",
+        model_path="allenai/OLMo-7B",
+        is_local=False,
+        model_type="causal"
+    ),
+    ModelConfig(
+        name="OLMo-7b-Tuned",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B",
+        is_local=True,
+        model_type="causal"
+    ),
+    ModelConfig(
+        name="Llama-3.2-3b",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
+        is_local=True,
+        model_type="causal"
+    ),
     # ModelConfig(
     #     name="Llama-3.2-3b",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
     #     is_local=True,
     #     model_type="causal"
     # ),
+    # ModelConfig(
+    #     name="Llama-4-Scout-17B-16E",
+    #     model_path="meta-llama/Llama-4-Scout-17B-16E",
+    #     is_local=False,
+    #     model_type="causal"
+    # ),
+    # # --- Encoder Model ---
+    # ModelConfig(
+    #     name="BERT-base-uncased",
+    #     model_path="bert-base-uncased",
+    #     is_local=False,
+    #     model_type="encoder" # <-- Specify type
+    # ),
+    # ModelConfig(
+    #     name="BERT-base-uncased-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_BERT-base-uncased",
+    #     is_local=False,
+    #     model_type="encoder" # <-- Specify type
+    # ),
 
-    # --- Encoder Model ---
-    ModelConfig(
-        name="BERT-base-uncased",
-        model_path="bert-base-uncased",
-        is_local=False,
-        model_type="encoder" # <-- Specify type
-    ),
-
-    # --- Encoder-Decoder Model ---
-    ModelConfig(
-        name="T5-base",
-        model_path="t5-base",
-        is_local=False,
-        model_type="encoder-decoder" # <-- Specify type
-    ),
-    ModelConfig(
-        name="Full_BERT-base-uncased",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_BERT-base-uncased",
-        is_local=False,
-        model_type="encoder" # <-- Specify type
-    ),
-
-    # --- Encoder-Decoder Model ---
-    ModelConfig(
-        name="Full_T5-base-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_T5-base-Tuned",
-        is_local=False,
-        model_type="encoder-decoder" # <-- Specify type
-    ),
+    # # --- Encoder-Decoder Model ---
+    # ModelConfig(
+    #     name="T5-base",
+    #     model_path="t5-base",
+    #     is_local=False,
+    #     model_type="encoder-decoder" # <-- Specify type
+    # ),
+    # ModelConfig(
+    #     name="T5-base-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_T5-base-Tuned",
+    #     is_local=False,
+    #     model_type="encoder-decoder" # <-- Specify type
+    # ),
 ]
 
 # --- Configuration ---
@@ -98,7 +107,7 @@ INDIVIDUAL_RESULTS_FOLDER = 'embedding_results'
 COMBINED_RESULTS_PATH = 'combined_word_embedding_results.json'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SAFE_MAX_LENGTH = 512  # Define a reasonable max length for tokenization
-NUM_SAMPLES = 5282
+NUM_SAMPLES = 500
 
 os.makedirs(INDIVIDUAL_RESULTS_FOLDER, exist_ok=True)
 logger.info(f"Using device: {DEVICE}")
@@ -267,8 +276,10 @@ for config in MODEL_CONFIGS:
             config.model_path,
             trust_remote_code=True,
             # torch_dtype=torch.float32, # Default is float32
+            torch_dtype=torch.bfloat16,
             local_files_only=config.is_local,
-            output_hidden_states=True # Ensure hidden states are outputted by default if possible
+            output_hidden_states=True, # Ensure hidden states are outputted by default if possible
+            device_map="auto" 
         )
 
         logger.info(f"Type of loaded object from {config.model_path}: {type(loaded_object)}")
@@ -276,8 +287,9 @@ for config in MODEL_CONFIGS:
              logger.error(f"Failed to load model correctly from {config.model_path}. Received type: {type(loaded_object)}")
              raise TypeError(f"Expected a PyTorch model from {config.model_path}, but got {type(loaded_object)}")
 
-        model = loaded_object.to(DEVICE)
-        logger.info(f"Model from {config.model_path} successfully moved to {DEVICE}.")
+        # model = loaded_object.to(DEVICE)
+        model = loaded_object
+        # logger.info(f"Model from {config.model_path} successfully moved to {DEVICE}.")
 
         # Set pad_token_id in model config if tokenizer has pad_token_id
         if tokenizer.pad_token_id is not None:
