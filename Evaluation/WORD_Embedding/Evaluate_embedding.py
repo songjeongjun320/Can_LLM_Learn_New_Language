@@ -30,49 +30,43 @@ class ModelConfig:
 # --- Updated MODEL_CONFIGS list ---
 MODEL_CONFIGS = [
     # --- Causal Models ---
-    ModelConfig(
-        name="OLMo-1b-org",
-        model_path="allenai/OLMo-1B",
-        is_local=False,
-        model_type="causal"
-    ),
-    ModelConfig(
-        name="OLMo-1b-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B",
-        is_local=True,
-        model_type="causal"
-    ),
-    ModelConfig(
-        name="OLMo-7b-org",
-        model_path="allenai/OLMo-7B",
-        is_local=False,
-        model_type="causal"
-    ),
-    ModelConfig(
-        name="OLMo-7b-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B",
-        is_local=True,
-        model_type="causal"
-    ),
-    ModelConfig(
-        name="Llama-3.2-3b",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
-        is_local=True,
-        model_type="causal"
-    ),
+    # ModelConfig(
+    #     name="OLMo-1b-org",
+    #     model_path="allenai/OLMo-1B",
+    #     is_local=False,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="OLMo-1b-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="OLMo-7b-org",
+    #     model_path="allenai/OLMo-7B",
+    #     is_local=False,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="OLMo-7b-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
     # ModelConfig(
     #     name="Llama-3.2-3b",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
     #     is_local=True,
     #     model_type="causal"
     # ),
-    # ModelConfig(
-    #     name="Llama-4-Scout-17B-16E",
-    #     model_path="meta-llama/Llama-4-Scout-17B-16E",
-    #     is_local=False,
-    #     model_type="causal"
-    # ),
-    # # --- Encoder Model ---
+    ModelConfig(
+        name="Llama-4-Scout-17B-16E",
+        model_path="meta-llama/Llama-4-Scout-17B-16E",
+        is_local=False,
+        model_type="causal"
+    ),
+    # --- Encoder Model ---
     # ModelConfig(
     #     name="BERT-base-uncased",
     #     model_path="bert-base-uncased",
@@ -102,9 +96,9 @@ MODEL_CONFIGS = [
 ]
 
 # --- Configuration ---
-WORD_PAIRS_PATH = '/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/WORD_Embedding/translated_words.json'
-INDIVIDUAL_RESULTS_FOLDER = 'embedding_results'
-COMBINED_RESULTS_PATH = 'combined_word_embedding_results.json'
+WORD_PAIRS_PATH = '/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/WORD_Embedding/ch_kr.json'
+INDIVIDUAL_RESULTS_FOLDER = 'embedding_results_ch_kr'
+COMBINED_RESULTS_PATH = 'llama4_results_ch_kr.json'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SAFE_MAX_LENGTH = 512  # Define a reasonable max length for tokenization
 NUM_SAMPLES = 500
