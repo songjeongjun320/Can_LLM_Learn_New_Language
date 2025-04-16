@@ -19,7 +19,7 @@ klue_sts_results/
 Fine_Tuned_Results/
 .ipynb_checkpoints/
 DB/
-llama3.2_3b/
+downloaded_models/
 
 # Result folders
 klue_sts_results/
@@ -30,6 +30,7 @@ klue_ner_results/
 klue_nli_results/
 klue_re_results/
 klue_tc_results/
+klue_sts_results_past/
 
 # Caches
 klue_dp_cache/

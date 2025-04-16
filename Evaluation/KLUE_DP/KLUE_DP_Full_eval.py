@@ -55,36 +55,60 @@ class ModelConfig:
 
 # Model configurations (from first code)
 MODEL_CONFIGS = [
-    ModelConfig(
-        name="full-OLMo-1b-org", 
-        model_path="allenai/OLMo-1B", 
-        output_dir="klue_dp_results/full-olmo1B-org-klue-dp",
-        is_local=False
-    ),
-    ModelConfig(
-        name="full-OLMo-1b-Tuned", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-        output_dir="klue_dp_results/full-olmo1B-v12-klue-dp",
-        is_local=True
-    ),
-    ModelConfig(
-        name="full-OLMo-7b-org", 
-        model_path="allenai/OLMo-7B", 
-        output_dir="klue_dp_results/full-olmo7B-org-klue-dp",
-        is_local=False
-    ),
-    ModelConfig(
-        name="full-OLMo-7b-Tuned", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_dp_results/full-olmo7B-v13-klue-dp",
-        is_local=True
-    ),
-    ModelConfig(
-        name="full-Llama-3.2:3B", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_dp_results/full-llama3.2-3b-klue-dp",
-        is_local=True
-    )
+    # ModelConfig(
+    #     name="full-OLMo-1b-org", 
+    #     model_path="allenai/OLMo-1B", 
+    #     output_dir="klue_dp_results/full-olmo1B-org-klue-dp",
+    #     is_local=False
+    # ),
+    # ModelConfig(
+    #     name="full-OLMo-1b-Tuned", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+    #     output_dir="klue_dp_results/full-olmo1B-v12-klue-dp",
+    #     is_local=True
+    # ),
+    # ModelConfig(
+    #     name="full-OLMo-7b-org", 
+    #     model_path="allenai/OLMo-7B", 
+    #     output_dir="klue_dp_results/full-olmo7B-org-klue-dp",
+    #     is_local=False
+    # ),
+    # ModelConfig(
+    #     name="full-OLMo-7b-Tuned", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+    #     output_dir="klue_dp_results/full-olmo7B-v13-klue-dp",
+    #     is_local=True
+    # ),
+    # ModelConfig(
+    #     name="full-Llama-3.2:3B", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+    #     output_dir="klue_dp_results/full-llama3.2-3b-klue-dp",
+    #     is_local=True
+    # ),
+    # ModelConfig(
+    #     name="Llama-3.2-3b-it",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
+    #     output_dir="klue_dp_results/lora-llama3.2-3b-it-klue-dp",
+    #     is_local=True,
+    # ),
+    # ModelConfig(
+    #     name="Llama-3.1-8b-it",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
+    #     output_dir="klue_dp_results/lora-llama3.1-8b-it-klue-dp",
+    #     is_local=True
+    # ),
+    # ModelConfig(
+    #     name="BERT-base-uncased",
+    #     model_path="bert-base-uncased",
+    #     is_local=False,
+    #     output_dir="klue_dp_results/BERT-base-uncased-klue-dp",
+    # ),
+    # ModelConfig(
+    #     name="BERT-base-uncased-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_BERT-base-uncased",
+    #     is_local=True, # Assuming this is local based on path pattern
+    #     output_dir="klue_dp_results/BERT-base-uncased-Tuned-klue-dp",
+    # ),
 ]
 
 # Configuration parameters
@@ -279,7 +303,7 @@ def train_model(model_config):
     full_train_data = DependencyParsingDataset(JSON_TRAIN_DATASET_PATH, tokenizer)  # 전체 훈련 데이터
 
     train_data, val_data = train_test_split(
-        full_train_data[:MAX_TRAIN_SAMPLES], 
+        full_train_data, 
         test_size=0.2,  # Val 20%
         random_state=42,  # 재현성 보장
         shuffle=True
@@ -291,16 +315,16 @@ def train_model(model_config):
         mlm=False
     )
     
-    # Training arguments
+    # TrainingArguments (이전 설정 사용)
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
-        evaluation_strategy="steps",
-        eval_steps=200,
+        eval_strategy="steps", # eval_strategy 오타 수정
+        eval_steps=400,
         learning_rate=2e-5,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
         gradient_accumulation_steps=2,
-        num_train_epochs=5,
+        num_train_epochs=3,
         weight_decay=0.01,
         save_total_limit=3,
         save_strategy="steps",
@@ -308,15 +332,16 @@ def train_model(model_config):
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
         fp16=False,
-        bf16=True,  # Use bfloat16 precision
+        bf16=True,
         lr_scheduler_type="cosine",
         warmup_ratio=0.1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
+        greater_is_better=False,
         report_to="none",
-        gradient_checkpointing=True,  # Enable gradient checkpointing for memory efficiency
+        gradient_checkpointing=True,
         optim="adamw_torch",
-        )
+    )
     
     # Early stopping callback
     early_stopping_callback = EarlyStoppingCallback(

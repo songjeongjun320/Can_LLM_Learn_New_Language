@@ -30,36 +30,36 @@ class ModelConfig:
 # --- Updated MODEL_CONFIGS list ---
 MODEL_CONFIGS = [
     # --- Causal Models ---
-    ModelConfig(
-        name="OLMo-1b-org",
-        model_path="allenai/OLMo-1B",
-        is_local=False,
-        model_type="causal"
-    ),
-    ModelConfig(
-        name="OLMo-1b-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B",
-        is_local=True,
-        model_type="causal"
-    ),
-    ModelConfig(
-        name="OLMo-7b-org",
-        model_path="allenai/OLMo-7B",
-        is_local=False,
-        model_type="causal"
-    ),
-    ModelConfig(
-        name="OLMo-7b-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B",
-        is_local=True,
-        model_type="causal"
-    ),
-    ModelConfig(
-        name="Llama-3.2-3b",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
-        is_local=True,
-        model_type="causal"
-    ),
+    # ModelConfig(
+    #     name="OLMo-1b-org",
+    #     model_path="allenai/OLMo-1B",
+    #     is_local=False,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="OLMo-1b-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="OLMo-7b-org",
+    #     model_path="allenai/OLMo-7B",
+    #     is_local=False,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="OLMo-7b-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="Llama-3.2-3b",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
     # ModelConfig(
     #     name="Llama-4-Scout-17B-16E",
     #     model_path="meta-llama/Llama-4-Scout-17B-16E",
@@ -67,36 +67,48 @@ MODEL_CONFIGS = [
     #     model_type="causal"
     # ),
     # --- Encoder Model ---
+    # ModelConfig(
+    #     name="BERT-base-uncased",
+    #     model_path="bert-base-uncased",
+    #     is_local=False,
+    #     model_type="encoder"
+    # ),
+    # ModelConfig(
+    #     name="BERT-base-uncased-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_BERT-base-uncased",
+    #     is_local=True, # Assuming this is local based on path pattern
+    #     model_type="encoder"
+    # ),
+    # # --- Encoder-Decoder Model ---
+    # ModelConfig(
+    #     name="T5-base",
+    #     model_path="t5-base",
+    #     is_local=False,
+    #     model_type="encoder-decoder"
+    # ),
+    # ModelConfig(
+    #     name="T5-base-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_T5-base-Tuned",
+    #     is_local=True, # Assuming this is local based on path pattern
+    #     model_type="encoder-decoder"
+    # ),
     ModelConfig(
-        name="BERT-base-uncased",
-        model_path="bert-base-uncased",
-        is_local=False,
-        model_type="encoder"
+        name="Llama-3.2-3b-it",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
+        is_local=True,
+        model_type="causal"
     ),
     ModelConfig(
-        name="BERT-base-uncased-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_BERT-base-uncased",
-        is_local=True, # Assuming this is local based on path pattern
-        model_type="encoder"
-    ),
-    # --- Encoder-Decoder Model ---
-    ModelConfig(
-        name="T5-base",
-        model_path="t5-base",
-        is_local=False,
-        model_type="encoder-decoder"
-    ),
-    ModelConfig(
-        name="T5-base-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_T5-base-Tuned",
-        is_local=True, # Assuming this is local based on path pattern
-        model_type="encoder-decoder"
+        name="Llama-3.1-8b-it",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
+        is_local=True,
+        model_type="causal"
     ),
 ]
 
 # --- Configuration ---
 # WORD_PAIRS_PATH = '/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/WORD_Embedding/en_ch.json'
-WORD_PAIRS_PATH = '/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/WORD_Embedding/en_ch.json' # Using KR for testing T5 again
+WORD_PAIRS_PATH = '/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/WORD_Embedding/en_kr.json' # Using KR for testing T5 again
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SAFE_MAX_LENGTH = 20
 # NUM_SAMPLES removed
@@ -197,6 +209,7 @@ def get_raw_and_last_embeddings(model, tokenizer, word, device, max_len, model_t
                 logger.warning(f"No attention mask provided by tokenizer for '{word}'. Creating default mask.")
                 inputs["attention_mask"] = model_inputs["attention_mask"] # Keep attention mask consistent
 
+            # --- Get it from Hidden state layers
             hidden_state_last = None
             try:
                 outputs = None
@@ -256,7 +269,8 @@ def get_raw_and_last_embeddings(model, tokenizer, word, device, max_len, model_t
             if tokenizer.eos_token_id is not None: special_tokens_to_exclude_ids.add(tokenizer.eos_token_id)
             # Add specific checks for space tokens or BOS tokens if necessary
             try:
-                if 3 in token_ids_list: # Example for T5 ' ' token ID
+                # Special Tokens
+                if 3 in token_ids_list: # Example for T5 _ token ID
                     idx_of_3 = token_ids_list.index(3)
                     if idx_of_3 < len(token_strings_list) and token_strings_list[idx_of_3] == " ":
                          special_tokens_to_exclude_ids.add(3)

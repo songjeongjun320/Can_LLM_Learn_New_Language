@@ -9,16 +9,15 @@ from transformers import (
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
-    EarlyStoppingCallback
 )
-from sklearn.model_selection import train_test_split 
+
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import logging
 import re
 from tqdm import tqdm
-import evaluate
 from dotenv import load_dotenv
 from huggingface_hub import login, HfApi
+from functools import partial # partial import 추가
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -35,35 +34,59 @@ class ModelConfig:
 # Model configurations
 MODEL_CONFIGS = [
     ModelConfig(
-        name="full-OLMo-1b-org", 
+        name="OLMo-1b-org", 
         model_path="allenai/OLMo-1B", 
-        output_dir="klue_sts_results/full-olmo1B-org-klue-sts",
+        output_dir="klue_sts_results/olmo1B-org-klue-sts",
         is_local=False
     ),
     ModelConfig(
-        name="full-OLMo-1b", 
+        name="OLMo-1b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-        output_dir="klue_sts_results/full-olmo1B-v12-klue-sts",
+        output_dir="klue_sts_results/olmo1B-v12-klue-sts",
         is_local=True
     ),
     ModelConfig(
-        name="full-OLMo-7b-org", 
+        name="OLMo-7b-org", 
         model_path="allenai/OLMo-7B", 
-        output_dir="klue_sts_results/full-olmo7B-org-klue-sts",
+        output_dir="klue_sts_results/olmo7B-org-klue-sts",
         is_local=False
     ),
     ModelConfig(
-        name="full-OLMo-7b", 
+        name="OLMo-7b", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_sts_results/full-olmo7B-v13-klue-sts",
+        output_dir="klue_sts_results/olmo7B-v13-klue-sts",
         is_local=True
     ),
-        ModelConfig(
-        name="full-Llama-3.2:3B", 
+    # ModelConfig(
+    #     name="BERT-base-uncased",
+    #     model_path="bert-base-uncased",
+    #     is_local=False,
+    #     output_dir="klue_sts_results/BERT-base-uncased-klue-sts",
+    # ),
+    # ModelConfig(
+    #     name="BERT-base-uncased-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_BERT-base-uncased",
+    #     is_local=True, # Assuming this is local based on path pattern
+    #     output_dir="klue_sts_results/BERT-base-uncased-Tuned-klue-sts",
+    # ),
+    ModelConfig(
+        name="Llama-3.2:3B", 
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_sts_results/full-llama3.2-3b-klue-sts",
+        output_dir="klue_sts_results/llama3.2-3b-klue-sts",
         is_local=True
-    )
+    ),
+    ModelConfig(
+        name="Llama-3.2-3b-it",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
+        is_local=True,
+        output_dir="klue_sts_results/llama3.2-3b-it-klue-sts",
+    ),
+    ModelConfig(
+        name="Llama-3.1-8b-it",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
+        is_local=True,
+        output_dir="klue_sts_results/llama3.1-8b-it-klue-sts",
+    ),
 ]
 
 # 기본 설정
@@ -144,33 +167,6 @@ def prepare_dataset_json():
     logger.info(f"Created klue_sts dataset: {JSON_DATASET_PATH}")
 
 
-# 데이터 전처리 함수
-def preprocess_function(examples, tokenizer, max_length=MAX_LENGTH):
-    # 프롬프트 형식
-    inputs = tokenizer([ex for ex in examples["input"]], 
-                      truncation=True, 
-                      max_length=max_length,
-                      padding="max_length",
-                      return_tensors="pt")
-    
-    # 출력 토큰화
-    with tokenizer.as_target_tokenizer():
-        labels = tokenizer([ex for ex in examples["output"]], 
-                         truncation=True, 
-                         max_length=128,  # 출력은 짧기 때문에 더 작은 길이 사용
-                         padding="max_length",
-                         return_tensors="pt")
-    
-    # 라벨 처리: -100은 손실 계산에서 무시됨
-    for i in range(len(labels["input_ids"])):
-        labels["input_ids"][i][labels["input_ids"][i] == tokenizer.pad_token_id] = -100
-    
-    return {
-        "input_ids": inputs["input_ids"],
-        "attention_mask": inputs["attention_mask"],
-        "labels": labels["input_ids"]
-    }
-
 # Model and tokenizer loading function
 def load_model_and_tokenizer(model_config):
     """모델 설정에 따라 모델과 토크나이저를 로드합니다."""
@@ -202,270 +198,165 @@ def load_model_and_tokenizer(model_config):
     
     return model, tokenizer
 
-# 메인 학습 함수
+# 메인 학습 함수 수정
 def train_model(model_config):
-    # Compute metrics function
-    def compute_metrics(p):
-        predictions, labels = p
-        predictions = np.argmax(predictions, axis=1)
-        
-        accuracy = accuracy_score(labels, predictions)
-        precision, recall, f1, _ = precision_recall_f1_support(labels, predictions, average="macro", zero_division=0)
-        
-        return {
-            "accuracy": accuracy,
-            "precision": precision,
-            "recall": recall,
-            "f1": f1
-        }
+    """
+    모델을 학습시킵니다.
+    JSON_TRAIN_DATASET_PATH를 90% 학습 / 10% 검증으로 분할하여 사용합니다.
+    """
+    # --- 데이터 전처리 함수 정의 (train_model 내부로 이동 또는 확인) ---
+    def preprocess_function_for_training(examples, tokenizer, max_length=MAX_LENGTH):
+        """학습용 데이터 전처리: input과 output을 결합하여 Causal LM 형식으로 만듭니다."""
+        # 입력이나 출력이 None인 경우 처리 (데이터 클리닝 강화)
+        texts = []
+        for inp, outp in zip(examples["input"], examples["output"]):
+            if inp is None or outp is None:
+                # logger.warning(f"Skipping sample with None input/output: inp='{inp}', outp='{outp}'")
+                # None 대신 빈 문자열로 처리하거나, 샘플을 건너뛰도록 로직 추가 가능
+                # 여기서는 예시로 빈 문자열 처리
+                inp = inp or ""
+                outp = outp or ""
 
-    """Train the model for RE using sequence classification approach."""
+            # 토크나이저의 eos_token 확인
+            eos_tok = tokenizer.eos_token
+            if eos_tok is None:
+                # 만약 eos_token이 없으면 다른 토큰 사용 (예: sep_token) 또는 에러 발생
+                eos_tok = tokenizer.sep_token # 예: sep_token 사용
+                if eos_tok is None:
+                     raise ValueError("Tokenizer has neither eos_token nor sep_token.")
+
+            texts.append(inp + eos_tok + outp + eos_tok) # 여기서 eos_tok 사용
+
+        model_inputs = tokenizer(
+            texts,
+            max_length=max_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt"
+        )
+        model_inputs["labels"] = model_inputs["input_ids"].clone()
+        return model_inputs
+    # --- 전처리 함수 정의 끝 ---
+
     logger.info(f"Starting training for {model_config.name}")
-    
+    logger.info(f"Splitting {JSON_TRAIN_DATASET_PATH} into 90% train / 10% validation for training.")
+
     os.makedirs(model_config.output_dir, exist_ok=True)
     os.makedirs(DATA_CACHE_DIR, exist_ok=True)
-    
+
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(model_config)
-    
-    # Load datasets
-    full_train_data = REDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    train_data, val_data = train_test_split(
-        full_train_data, 
-        test_size=0.2,  # Val 20%
-        random_state=42,  # 재현성 보장
-        shuffle=True
-    )
-    logger.info(f"Loaded data - train: {len(train_data)} examples, validation: {len(val_data)} examples")
 
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False
-    )
-    # 모델 및 토크나이저 로드
-    model, tokenizer = load_model_and_tokenizer(model_config)
-    
-    # 학습용 데이터셋 생성
-    from torch.utils.data import Dataset
+    # --- 데이터 로딩 및 분할 ---
+    logger.info(f"Loading dataset to be split from: {JSON_TRAIN_DATASET_PATH}")
+    try:
+        full_train_val_dataset = load_dataset("json", data_files={"train": JSON_TRAIN_DATASET_PATH}, cache_dir=DATA_CACHE_DIR, split="train")
+        logger.info(f"Loaded dataset with {len(full_train_val_dataset)} samples.")
+        split_dataset = full_train_val_dataset.train_test_split(test_size=0.1, seed=42, shuffle=True)
+        raw_train_dataset = split_dataset["train"]
+        raw_val_dataset_for_training = split_dataset["test"]
+        logger.info(f"Split dataset: train={len(raw_train_dataset)}, validation_during_training={len(raw_val_dataset_for_training)}")
+    except Exception as e:
+        logger.error(f"Failed to load or split dataset from {JSON_TRAIN_DATASET_PATH}: {e}")
+        raise
+
+    # --- 전처리 ---
+    logger.info("Preprocessing training dataset...")
+    # partial 사용 시점에 preprocess_function_for_training이 정의되어 있어야 함
+    preprocess_with_tokenizer = partial(preprocess_function_for_training, tokenizer=tokenizer, max_length=MAX_LENGTH)
+    tokenized_train_dataset = raw_train_dataset.map(preprocess_with_tokenizer, batched=True, remove_columns=raw_train_dataset.column_names)
+    logger.info(f"Tokenized training dataset prepared: {len(tokenized_train_dataset)} examples")
+
+    logger.info("Preprocessing validation dataset (used during training)...")
+    tokenized_val_dataset_for_training = raw_val_dataset_for_training.map(preprocess_with_tokenizer, batched=True, remove_columns=raw_val_dataset_for_training.column_names)
+    logger.info(f"Tokenized validation dataset prepared: {len(tokenized_val_dataset_for_training)} examples")
 
     # 데이터 콜레이터
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False
-    )
-    
-    # Training arguments
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+    # TrainingArguments (검증 설정 유지)
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
-        evaluation_strategy="steps",
-        eval_steps=200,
+        eval_strategy="steps",
+        eval_steps=400,
         learning_rate=2e-5,
-        per_device_train_batch_size=8,  # 배치 크기 증가
-        per_device_eval_batch_size=8,  # 배치 크기 증가
-        gradient_accumulation_steps=2,  # 축적 단계 감소
-        num_train_epochs=2,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        gradient_accumulation_steps=2,
+        num_train_epochs=5, # 필요시 epoch 조정
         weight_decay=0.01,
         save_total_limit=3,
         save_strategy="steps",
         save_steps=400,
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
-        fp16=False,  # FP16으로 전환
-        bf16=True,  # BF16 비활성화
+        fp16=False,
+        bf16=True,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.1,  # Warmup 비율 감소
+        warmup_ratio=0.1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
+        greater_is_better=False,
         report_to="none",
-        gradient_checkpointing=True,  # 체크포인팅 비활성화
-        optim="adamw_torch",  # 필요 시 "adamw_8bit"로 변경
+        gradient_checkpointing=True,
+        optim="adamw_torch",
     )
-    
-    # 얼리 스토핑 콜백
-    early_stopping_callback = EarlyStoppingCallback(
-        early_stopping_patience=5
-    )
-    
-    # 트레이너 초기화 및 학습
-    logger.info("Reset Trainer...")
+
+    # 트레이너 초기화
+    logger.info("Initializing Trainer with split train/validation datasets...")
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_data,
-        eval_dataset=val_data,
+        train_dataset=tokenized_train_dataset,
+        eval_dataset=tokenized_val_dataset_for_training,
         data_collator=data_collator,
-        callbacks=[early_stopping_callback],
     )
-    
+
     # 학습 실행
+    logger.info("Starting model training with periodic validation...")
     trainer.train()
-    
-    # 최종 모델 및 토크나이저 저장
-    final_model_path = os.path.join(model_config.output_dir, "final")
-    logger.info(f"Final Model: {final_model_path}")
-    
-    # Ollama 모델이 아닌 경우에만 저장 (로컬 모델)
-    if not model_config.is_ollama:
-        model.save_pretrained(final_model_path)
-        tokenizer.save_pretrained(final_model_path)
-    else:
-        # Ollama 모델의 경우 토크나이저만 저장
-        tokenizer.save_pretrained(final_model_path)
-        # Ollama 모델 정보 저장
-        with open(os.path.join(final_model_path, "ollama_config.json"), "w") as f:
-            json.dump({
-                "model": model_config.model_path,
-                "host": model_config.ollama_host
-            }, f)
-    
-    logger.info("Tuned!")
-    return model, tokenizer
+    logger.info("Training finished.")
 
-# 모델 평가 함수 (Ollama API 지원 추가)
-def evaluate_model(model, tokenizer, model_config="OLMo7b"):
-    logger.info(f"Evaluating the model: {model_config.name}")
-    
-    # KLUE STS 데이터셋 로드
-    klue_sts = load_dataset("klue", "sts", cache_dir=DATA_CACHE_DIR)
-    
-    # 평가용 하위 집합
-    val_subset = klue_sts["validation"]
+    # 최종 모델 및 토크나이저 저장 (최고 성능 모델 저장)
+    final_model_path = os.path.join(model_config.output_dir, "final_model") # 경로 일관성 위해 이름 변경
+    logger.info(f"Saving final best model (based on validation subset) to: {final_model_path}")
+    trainer.save_model(final_model_path)
+    tokenizer.save_pretrained(final_model_path)
 
-    model.eval()
-    
-    true_scores = []
-    pred_scores = []
+    logger.info("Training and saving best model completed!")
 
-    log_file_path = os.path.join(model_config.output_dir, "log.json")
-    logs = []
-
-    for item in tqdm(val_subset):
-        sentence1 = item["sentence1"]
-        sentence2 = item["sentence2"]
-        true_score = item["labels"]["label"]
-        
-        # 프롬프트 생성
-        prompt = f"Analyze the following sentence pairs and provide a similarity score between 0 and 5, where 0 means completely different and 5 means identical in meaning. Sentence 1: {sentence1} Sentence 2: {sentence2}"
-
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-        
-        # 추론
-        with torch.no_grad():
-            outputs = model.generate(
-                inputs["input_ids"],
-                max_new_tokens=20,
-                temperature=0.1,
-                num_return_sequences=1,
-                pad_token_id=tokenizer.pad_token_id
-            )
-
-        # 결과 디코딩
-        generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        # 간단한 정규식으로 0-5 사이의 소수점 숫자 추출 (단어 경계 없이)
-        matches = re.findall(r'([0-5](?:\.\d+)?)', generated_text)
-        predicted_score = None
-        
-        # 먼저 "The similarity score is" 다음에 오는 숫자를 찾아보기
-        if "The similarity score is" in generated_text:
-            after_score_text = generated_text.split("The similarity score is")[1].strip()
-            score_matches = re.findall(r'([0-5](?:\.\d+)?)', after_score_text)
-            if score_matches:
-                try:
-                    predicted_score = float(score_matches[0])
-                    if 0 <= predicted_score <= 5:
-                        true_scores.append(true_score)
-                        pred_scores.append(predicted_score)
-                    else:
-                        logger.warning(f"Out of scope (0-5): {predicted_score}")
-                except ValueError:
-                    logger.warning(f"Failed to convert to float: {score_matches[0]}")
-
-        # 로그 저장을 위한 데이터
-        log_data = {
-            "input": sentence1 + " | " + sentence2,  # 입력 문장 쌍
-            "generated_text": generated_text,  # 생성된 텍스트
-            "true_score": true_score,  # 실제 점수
-            "predicted_score": predicted_score # 예측 점수
-        }
-        
-        logs.append(log_data)
-
-    # 로그를 파일에 저장
-    with open(log_file_path, "w", encoding="utf-8") as f:
-        json.dump(logs, f, ensure_ascii=False, indent=2)
-
-    # 메트릭 계산
-    if true_scores and pred_scores:
-        logger.info(f"Eval result:")
-        logger.info(f"Eval Model: {model_config.model_path}")
-        logger.info(f"Evaluated samples: {len(true_scores)}")
-
-        # Pearson Correlation 계산
-        pearson_corr = np.corrcoef(true_scores, pred_scores)[0, 1]
-        logger.info(f"Pearson Correction: {pearson_corr:.4f}")
-        
-        # RMSE 계산
-        rmse = np.sqrt(mean_squared_error(true_scores, pred_scores))
-        logger.info(f"RMSE: {rmse:.4f}")
-        
-        # MAE 계산
-        mae = mean_absolute_error(true_scores, pred_scores)
-        logger.info(f"MAE: {mae:.4f}")
-        
-        # MSE 계산
-        mse = mean_squared_error(true_scores, pred_scores)
-        logger.info(f"MSE: {mse:.4f}")
-
-        # 평가 지표 로드
-        # bleu_metric = evaluate.load("bleu")  # ✅ 변경된 부분
-        # bleu_score = bleu_metric.compute(predictions=[pred_scores], references=[true_scores])
-        # rouge_metric = evaluate.load("rouge")  # ✅ 변경된 부분
-        # rouge_score = rouge_metric.compute(predictions=[pred_scores], references=[true_scores])
-        
-        # 실제로는 여러 개의 예측문장이 있을 수 있으므로, 적절한 형식으로 데이터를 맞춰야 함
-        # bleu_score = bleu_metric.compute(predictions=[pred_scores], references=[true_scores])
-        # logger.info(f"BLEU: {bleu_score['bleu']:.4f}")
-        # rouge_score = rouge_metric.compute(predictions=[pred_scores], references=[true_scores])
-        # logger.info(f"ROUGE: {rouge_score['rouge']:.4f}")
-
-        # 평가 결과를 파일에 저장
-        eval_results = {
-            "model": model_config.name,
-            "pearson_correlation": float(pearson_corr),
-            "rmse": float(rmse),
-            "mae": float(mae),
-            "mse": float(mse),
-            # "bleu": float(bleu_score['bleu']),
-            # "rouge": float(rouge_score['rouge']),
-            "num_samples": len(true_scores)
-        }
-
-        # 결과를 JSON 파일로 저장
-        eval_file_path = os.path.join(model_config.output_dir, "eval_results.json")
-        with open(eval_file_path, "w", encoding="utf-8") as f:
-            json.dump(eval_results, f, ensure_ascii=False, indent=2)
-    else:
-        logger.warning("No valid prediction.")
 
 # 메인 실행 함수
 if __name__ == "__main__":
-    # 각 모델별로 학습 및 평가 실행
+    # 각 모델별로 학습 실행
     for model_config in MODEL_CONFIGS:
+        logger.info(f"--- Processing model: {model_config.name} ---")
         # 출력 디렉토리 생성
         os.makedirs(model_config.output_dir, exist_ok=True)
         os.makedirs(DATA_CACHE_DIR, exist_ok=True)
-        
-        logger.info(f"Starting training for {model_config.name}")
-        
+
+        # 변수 초기화 (필요시)
+        model = None
+        tokenizer = None
+        trainer = None # try 블록 내에서만 사용되므로 사실상 불필요
+
         try:
-            # 모델 학습
-            model, tokenizer = train_model(model_config)
-            
-            # 모델 평가
-            evaluate_model(model, tokenizer, model_config)
-            
-            logger.info(f"Completed training and evaluation for {model_config.name}")
+            # 모델 학습만 실행
+            train_model(model_config) # 반환값 받지 않음
+
+            logger.info(f"--- Completed training for {model_config.name} ---") # 로그 메시지 수정
+
         except Exception as e:
-            logger.error(f"Error in model {model_config.name}: {e}")
+            logger.error(f"Error processing model {model_config.name}: {e}")
             logger.exception("Exception details:")
+        finally:
+            # --- 메모리 정리 (Trainer는 train_model 내에서 소멸) ---
+            logger.info(f"Cleaning up resources for {model_config.name}...")
+            del model
+            del tokenizer
+            # del trainer # train_model 함수 종료 시 자동으로 참조 해제됨
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.info("Cleared CUDA cache.")
+            logger.info(f"Resource cleanup finished for {model_config.name}.")
+            print("-" * 50)
