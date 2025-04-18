@@ -22,15 +22,15 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # --- 기본 설정 ---
-ROOT_DIRECTORY = "klue_sts_results_regression" # Regression 결과가 저장된 루트 디렉토리
-JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_sts_validation_numeric.json"
+ROOT_DIRECTORY = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_STS/klue_sts_results" # Regression 결과가 저장된 루트 디렉토리
+JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_sts_validation.json"
 DATA_CACHE_DIR = "./klue_sts_regression_eval_cache"
 MAX_LENGTH = 512
 MAX_EVAL_SAMPLES = 512
 # INDIVIDUAL_LOG_FILENAME = "evaluation_log_regression.json" # 로그 파일 대신 결과 파일 사용
-INDIVIDUAL_RESULT_FILENAME = "eval_results_regression.json" # 각 모델별 결과 파일 이름
-SUMMARY_FILENAME = "STS_evaluation_summary_regression.json"
-FINE_TUNED_MODEL_SUBDIR = "final" # 학습 스크립트 확인 필요
+INDIVIDUAL_RESULT_FILENAME = "eval_results_regression_5000.json" # 각 모델별 결과 파일 이름
+SUMMARY_FILENAME = "STS_evaluation_summary_regression_5000.json"
+FINE_TUNED_MODEL_SUBDIR = "final_model" # 학습 스크립트 확인 필요
 
 # --- Regression용 모델 로딩 함수 ---
 def load_model_and_tokenizer_for_regression(model_config):
@@ -263,11 +263,6 @@ if __name__ == "__main__":
     evaluated_models = []
     eval_subset_to_run = evaluation_dataset.select(range(min(MAX_EVAL_SAMPLES, len(evaluation_dataset))))
     logger.info(f"Will evaluate on {len(eval_subset_to_run)} samples (up to MAX_EVAL_SAMPLES={MAX_EVAL_SAMPLES})")
-
-    # ModelConfig 클래스 정의 확인 (스크립트 상단에 있어야 함)
-    if 'ModelConfig' not in globals():
-        logger.error("CRITICAL: ModelConfig class is not defined.")
-        exit()
 
     for item_name in os.listdir(ROOT_DIRECTORY):
         model_dir_path = os.path.join(ROOT_DIRECTORY, item_name)

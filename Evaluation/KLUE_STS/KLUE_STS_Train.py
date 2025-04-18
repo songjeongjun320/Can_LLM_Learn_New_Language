@@ -32,18 +32,18 @@ class ModelConfig:
 
 # Model configurations
 MODEL_CONFIGS = [
-    # ModelConfig(
-    #     name="OLMo-1b-org", 
-    #     model_path="allenai/OLMo-1B", 
-    #     output_dir="klue_sts_results/olmo1B-org-klue-sts",
-    #     is_local=False
-    # ),
-    # ModelConfig(
-    #     name="OLMo-1b", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-    #     output_dir="klue_sts_results/olmo1B-v12-klue-sts",
-    #     is_local=True
-    # ),
+    ModelConfig(
+        name="OLMo-1b-org", 
+        model_path="allenai/OLMo-1B", 
+        output_dir="klue_sts_results/olmo1B-org-klue-sts",
+        is_local=False
+    ),
+    ModelConfig(
+        name="OLMo-1b", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+        output_dir="klue_sts_results/olmo1B-v12-klue-sts",
+        is_local=True
+    ),
     # ModelConfig(
     #     name="OLMo-7b-org", 
     #     model_path="allenai/OLMo-7B", 
@@ -92,12 +92,12 @@ MODEL_CONFIGS = [
     #     output_dir="klue_sts_results/BERT-uncased-kr-eng-translation-klue-sts",
     #     is_local=True
     # ),
-    ModelConfig(
-        name="BERT-uncased-origin-translation",
-        model_path="google-bert/bert-base-uncased",
-        output_dir="klue_sts_results/BERT-uncased-origin-translation-klue-sts",
-        is_local=False
-    ),
+    # ModelConfig(
+    #     name="BERT-uncased-origin-translation",
+    #     model_path="google-bert/bert-base-uncased",
+    #     output_dir="klue_sts_results/BERT-uncased-origin-translation-klue-sts",
+    #     is_local=False
+    # ),
 ]
 
 

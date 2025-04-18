@@ -73,18 +73,18 @@ MODEL_CONFIGS = [
     #     output_dir="klue_dp_results/olmo7B-org-klue-dp",
     #     is_local=False
     # ),
-    ModelConfig(
-        name="OLMo-7b-Tuned", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_dp_results/olmo7B-v13-klue-dp",
-        is_local=True
-    ),
-    ModelConfig(
-        name="Llama-3.2:3B", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_dp_results/llama3.2-3b-klue-dp",
-        is_local=True
-    ),
+    # ModelConfig(
+    #     name="OLMo-7b-Tuned", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+    #     output_dir="klue_dp_results/olmo7B-v13-klue-dp",
+    #     is_local=True
+    # ),
+    # ModelConfig(
+    #     name="Llama-3.2:3B", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+    #     output_dir="klue_dp_results/llama3.2-3b-klue-dp",
+    #     is_local=True
+    # ),
     # ModelConfig(
     #     name="Llama-3.2-3b-it",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
@@ -97,18 +97,18 @@ MODEL_CONFIGS = [
     #     output_dir="klue_dp_results/lora-llama3.1-8b-it-klue-dp",
     #     is_local=True
     # ),
-    # ModelConfig(
-    #     name="BERT-base-uncased",
-    #     model_path="bert-base-uncased",
-    #     is_local=False,
-    #     output_dir="klue_dp_results/BERT-base-uncased-klue-dp",
-    # ),
-    # ModelConfig(
-    #     name="BERT-base-uncased-Tuned",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_BERT-base-uncased",
-    #     is_local=True, # Assuming this is local based on path pattern
-    #     output_dir="klue_dp_results/BERT-base-uncased-Tuned-klue-dp",
-    # ),
+    ModelConfig(
+        name="BERT-base-uncased",
+        model_path="google-bert/bert-base-uncased",
+        is_local=False,
+        output_dir="klue_dp_results/BERT-base-uncased-klue-dp",
+    ),
+    ModelConfig(
+        name="BERT-uncased-kr-eng-translation",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/bert-uncased-finetuned-kr-eng",
+        is_local=True, # Assuming this is local based on path pattern
+        output_dir="klue_dp_results/BERT-uncased-kr-eng-translation-klue-dp",
+    ),
 ]
 
 # Configuration parameters
@@ -321,9 +321,9 @@ def train_model(model_config):
         eval_strategy="steps", # eval_strategy 오타 수정
         eval_steps=400,
         learning_rate=2e-5,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
-        gradient_accumulation_steps=2,
+        per_device_train_batch_size=4,
+        per_device_eval_batch_size=4,
+        gradient_accumulation_steps=4,
         num_train_epochs=3,
         weight_decay=0.01,
         save_total_limit=3,

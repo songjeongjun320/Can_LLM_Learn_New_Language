@@ -108,7 +108,7 @@ MODEL_CONFIGS = [
 # Configuration parameters
 DATA_CACHE_DIR = "./klue_nli_cache"
 JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_nli_train.json"
-MAX_LENGTH = 256
+MAX_LENGTH = 512
 
 #  --- Model and tokenizer loading function (PEFT 제거) ---
 def load_model_and_tokenizer(model_config, num_labels=NUM_LABELS):

@@ -72,17 +72,29 @@ MODEL_CONFIGS = [
     #     output_dir="klue_mrc_results/full-llama3.2-3b-klue-mrc",
     #     is_local=True
     # ),
+    # ModelConfig(
+    #     name="Llama-3.2-3b-it",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
+    #     output_dir="klue_mrc_results/lora-llama3.2-3b-it-klue-mrc",
+    #     is_local=True,
+    # ),
+    # ModelConfig(
+    #     name="Llama-3.1-8b-it",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
+    #     output_dir="klue_mrc_results/lora-llama3.1-8b-it-klue-mrc",
+    #     is_local=True
+    # ),
     ModelConfig(
-        name="Llama-3.2-3b-it",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
-        output_dir="klue_mrc_results/lora-llama3.2-3b-it-klue-mrc",
-        is_local=True,
+        name="BERT-base-uncased",
+        model_path="google-bert/bert-base-uncased",
+        is_local=False,
+        output_dir="klue_mrc_results/BERT-base-uncased-klue-mrc",
     ),
     ModelConfig(
-        name="Llama-3.1-8b-it",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
-        output_dir="klue_mrc_results/lora-llama3.1-8b-it-klue-mrc",
-        is_local=True
+        name="BERT-uncased-kr-eng-translation",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/bert-uncased-finetuned-kr-eng",
+        is_local=True, # Assuming this is local based on path pattern
+        output_dir="klue_mrc_results/BERT-uncased-kr-eng-translation-klue-mrc",
     ),
 ]
 
