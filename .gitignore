@@ -82,3 +82,5 @@ klue_sts_origin_cache/
 cookies.txt
 /Refined_Datas/
 venv
+FineTuning/BERT/cache/
+*.arrow
