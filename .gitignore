@@ -51,6 +51,7 @@ klue_sts_cache/
 klue_tc_cache/
 klue_sts_origin_cache/
 klue_sts_regression_cache/
+cache/
 
 *.log
 *.zip

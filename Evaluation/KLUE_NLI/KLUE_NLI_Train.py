@@ -86,18 +86,18 @@ MODEL_CONFIGS = [
     #     output_dir="klue_nli_results/llama3.2-3b-it-klue-nli",
     #     is_local=True,
     # ),
-    # ModelConfig(
-    #     name="Llama-3.1-8b-it",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
-    #     output_dir="klue_nli_results/llama3.1-8b-it-klue-nli",
-    #     is_local=True
-    # ),
     ModelConfig(
-        name="BERT-uncased-origin-translation",
-        model_path="google-bert/bert-base-uncased",
-        output_dir="klue_nli_results/BERT-uncased-origin-klue-nli",
-        is_local=False
+        name="Llama-3.1-8b-it",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
+        output_dir="klue_nli_results/llama3.1-8b-it-klue-nli",
+        is_local=True
     ),
+    # ModelConfig(
+    #     name="BERT-uncased-origin-translation",
+    #     model_path="google-bert/bert-base-uncased",
+    #     output_dir="klue_nli_results/BERT-uncased-origin-klue-nli",
+    #     is_local=False
+    # ),
     # ModelConfig(
     #     name="BERT-uncased-kr-eng-translation",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/bert-uncased-finetuned-kr-eng",
