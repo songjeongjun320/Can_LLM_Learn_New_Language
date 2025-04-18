@@ -107,12 +107,12 @@ MODEL_CONFIGS = [
     #     output_dir="klue_re_results/full-llama3.2-3b-klue-re",
     #     is_local=True
     # ),
-    ModelConfig(
-        name="Llama-3.2-3b-it",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
-        output_dir="klue_re_results/lora-llama3.2-3b-it-klue-re",
-        is_local=True,
-    ),
+    # ModelConfig(
+    #     name="Llama-3.2-3b-it",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
+    #     output_dir="klue_re_results/lora-llama3.2-3b-it-klue-re",
+    #     is_local=True,
+    # ),
     ModelConfig(
         name="Llama-3.1-8b-it",
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
@@ -124,7 +124,7 @@ MODEL_CONFIGS = [
 # Configuration parameters
 DATA_CACHE_DIR = "./klue_re_cache"
 JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_re_train.json"
-MAX_LENGTH = 1024
+MAX_LENGTH = 512
 MAX_EVAL_SAMPLES = 200
 
 # Model and tokenizer loading function
@@ -290,9 +290,9 @@ def train_model(model_config):
         eval_strategy="steps", 
         eval_steps=200,
         learning_rate=2e-5, 
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=16, 
-        gradient_accumulation_steps=2,
+        per_device_train_batch_size=4,
+        per_device_eval_batch_size=4, 
+        gradient_accumulation_steps=4,
         num_train_epochs=3, 
         weight_decay=0.01, 
         save_total_limit=2,

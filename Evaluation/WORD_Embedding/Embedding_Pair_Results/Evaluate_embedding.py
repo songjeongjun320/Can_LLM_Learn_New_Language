@@ -79,6 +79,12 @@ MODEL_CONFIGS = [
     #     is_local=True, # Assuming this is local based on path pattern
     #     model_type="encoder"
     # ),
+    ModelConfig(
+        name="BERT-base-uncased-KR-ENG-Tuned",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/bert-uncased-finetuned-kr-eng",
+        is_local=True, # Assuming this is local based on path pattern
+        model_type="encoder"
+    ),
     # # --- Encoder-Decoder Model ---
     # ModelConfig(
     #     name="T5-base",
@@ -92,18 +98,18 @@ MODEL_CONFIGS = [
     #     is_local=True, # Assuming this is local based on path pattern
     #     model_type="encoder-decoder"
     # ),
-    ModelConfig(
-        name="Llama-3.2-3b-it",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
-        is_local=True,
-        model_type="causal"
-    ),
-    ModelConfig(
-        name="Llama-3.1-8b-it",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
-        is_local=True,
-        model_type="causal"
-    ),
+    # ModelConfig(
+    #     name="Llama-3.2-3b-it",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
+    # ModelConfig(
+    #     name="Llama-3.1-8b-it",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
+    #     is_local=True,
+    #     model_type="causal"
+    # ),
 ]
 
 # --- Configuration ---

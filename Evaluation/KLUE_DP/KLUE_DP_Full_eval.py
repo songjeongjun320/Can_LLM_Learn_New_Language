@@ -56,35 +56,35 @@ class ModelConfig:
 # Model configurations (from first code)
 MODEL_CONFIGS = [
     # ModelConfig(
-    #     name="full-OLMo-1b-org", 
+    #     name="OLMo-1b-org", 
     #     model_path="allenai/OLMo-1B", 
-    #     output_dir="klue_dp_results/full-olmo1B-org-klue-dp",
+    #     output_dir="klue_dp_results/olmo1B-org-klue-dp",
     #     is_local=False
     # ),
     # ModelConfig(
-    #     name="full-OLMo-1b-Tuned", 
+    #     name="OLMo-1b-Tuned", 
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-    #     output_dir="klue_dp_results/full-olmo1B-v12-klue-dp",
+    #     output_dir="klue_dp_results/olmo1B-v12-klue-dp",
     #     is_local=True
     # ),
     # ModelConfig(
-    #     name="full-OLMo-7b-org", 
+    #     name="OLMo-7b-org", 
     #     model_path="allenai/OLMo-7B", 
-    #     output_dir="klue_dp_results/full-olmo7B-org-klue-dp",
+    #     output_dir="klue_dp_results/olmo7B-org-klue-dp",
     #     is_local=False
     # ),
-    # ModelConfig(
-    #     name="full-OLMo-7b-Tuned", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-    #     output_dir="klue_dp_results/full-olmo7B-v13-klue-dp",
-    #     is_local=True
-    # ),
-    # ModelConfig(
-    #     name="full-Llama-3.2:3B", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-    #     output_dir="klue_dp_results/full-llama3.2-3b-klue-dp",
-    #     is_local=True
-    # ),
+    ModelConfig(
+        name="OLMo-7b-Tuned", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+        output_dir="klue_dp_results/olmo7B-v13-klue-dp",
+        is_local=True
+    ),
+    ModelConfig(
+        name="Llama-3.2:3B", 
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+        output_dir="klue_dp_results/llama3.2-3b-klue-dp",
+        is_local=True
+    ),
     # ModelConfig(
     #     name="Llama-3.2-3b-it",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
@@ -304,7 +304,7 @@ def train_model(model_config):
 
     train_data, val_data = train_test_split(
         full_train_data, 
-        test_size=0.2,  # Val 20%
+        test_size=0.1,  # Val 20%
         random_state=42,  # 재현성 보장
         shuffle=True
     )

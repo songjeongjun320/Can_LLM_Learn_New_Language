@@ -20,6 +20,7 @@ Fine_Tuned_Results/
 .ipynb_checkpoints/
 DB/
 downloaded_models/
+KR_ENG_Dataset_Refined/
 
 # Result folders
 klue_sts_results/
@@ -31,6 +32,11 @@ klue_nli_results/
 klue_re_results/
 klue_tc_results/
 klue_sts_results_past/
+klue_dst_results_prev/
+bert-uncased-finetuned-kr-eng/
+klue_nli_results_prev/
+klue_nli_results_lora/
+
 
 # Caches
 klue_dp_cache/
@@ -40,8 +46,11 @@ klue_mrc_cache/
 klue_ner_cache/
 klue_nli_cache/
 klue_re_cache/
+klue_sts_results_prev/
 klue_sts_cache/
 klue_tc_cache/
+klue_sts_origin_cache/
+klue_sts_regression_cache/
 
 *.log
 *.zip

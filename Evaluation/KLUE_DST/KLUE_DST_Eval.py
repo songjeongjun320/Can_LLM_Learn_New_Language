@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # --- 기본 설정 ---
 ROOT_DIRECTORY = "klue_dst_results" # 학습 결과가 저장된 루트 디렉토리
-JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dst_validation.json"
+JSON_VAL_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dst_validation_filtered.json"
 DATA_CACHE_DIR = "./klue_dst_eval_cache"
 MAX_LENGTH = 768 # 학습 시 사용한 길이와 맞춤
 MAX_EVAL_SAMPLES = 200 # 평가 샘플 수 제한 (전체 사용 시 매우 큰 값 설정 또는 슬라이싱 제거)

@@ -19,6 +19,7 @@ from tqdm import tqdm
 from torch.utils.data import Dataset, Subset
 import torch.nn.functional as F
 from datasets import load_dataset
+from functools import partial
 
 # Setup logging
 logging.basicConfig(
@@ -41,36 +42,36 @@ class ModelConfig:
 
 # 모델 설정들 (기본 OLMo 1B, OLMo 7B)
 MODEL_CONFIGS = [
-    ModelConfig(
-        name="full-OLMo-1b-org", 
-        model_path="allenai/OLMo-1B", 
-        output_dir="klue_mrc_results/full-olmo1B-org-klue-mrc",
-        is_local=False
-    ),
-    ModelConfig(
-        name="full-OLMo-1b", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
-        output_dir="klue_mrc_results/full-olmo1B-v12-klue-mrc",
-        is_local=True
-    ),
-    ModelConfig(
-        name="full-OLMo-7b-org", 
-        model_path="allenai/OLMo-7B", 
-        output_dir="klue_mrc_results/full-olmo7B-org-klue-mrc",
-        is_local=False
-    ),
-    ModelConfig(
-        name="full-OLMo-7b", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
-        output_dir="klue_mrc_results/full-olmo7B-v13-klue-mrc",
-        is_local=True
-    ),
-        ModelConfig(
-        name="full-Llama-3.2:3B", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_mrc_results/full-llama3.2-3b-klue-mrc",
-        is_local=True
-    ),
+    # ModelConfig(
+    #     name="full-OLMo-1b-org", 
+    #     model_path="allenai/OLMo-1B", 
+    #     output_dir="klue_mrc_results/full-olmo1B-org-klue-mrc",
+    #     is_local=False
+    # ),
+    # ModelConfig(
+    #     name="full-OLMo-1b", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B", 
+    #     output_dir="klue_mrc_results/full-olmo1B-v12-klue-mrc",
+    #     is_local=True
+    # ),
+    # ModelConfig(
+    #     name="full-OLMo-7b-org", 
+    #     model_path="allenai/OLMo-7B", 
+    #     output_dir="klue_mrc_results/full-olmo7B-org-klue-mrc",
+    #     is_local=False
+    # ),
+    # ModelConfig(
+    #     name="full-OLMo-7b", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B", 
+    #     output_dir="klue_mrc_results/full-olmo7B-v13-klue-mrc",
+    #     is_local=True
+    # ),
+    #     ModelConfig(
+    #     name="full-Llama-3.2:3B", 
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
+    #     output_dir="klue_mrc_results/full-llama3.2-3b-klue-mrc",
+    #     is_local=True
+    # ),
     ModelConfig(
         name="Llama-3.2-3b-it",
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
@@ -121,67 +122,6 @@ def load_model_and_tokenizer(model_config):
     
     return model, tokenizer
 
-# Custom Dataset for KLUE-MRC
-class MachineReadingComprehensionDataset(Dataset):
-    def __init__(self, data_path, tokenizer, max_length=MAX_LENGTH):
-        logger.info(f"Loading MRC dataset from {data_path}")
-        
-        with open(data_path, "r", encoding="utf-8") as f:
-            self.data = json.load(f)
-        
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        logger.info(f"Loaded {len(self.data)} samples for MRC")
-        
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        item = self.data[idx]
-        
-        # Extract data
-        title = item.get("title", "")
-        context = item.get("context", "")
-        question = item.get("question", "")
-        answers = item.get("answers", {"text": [""]})
-        answer_text = answers.get("text", [""])[0] if answers.get("text") else ""
-        
-        # Create prompt and completion
-        prompt = f"Read the following passage and answer the question.\n\nTitle: {title}\n\nPassage: {context}\n\nQuestion: {question}\n\nAnswer:"
-        
-        completion = f" {answer_text}"
-        
-        # Combine prompt and completion for training
-        full_text = prompt + completion
-        
-        # Tokenize the full text
-        encoded = self.tokenizer(
-            full_text,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt"
-        )
-        
-        # Tokenize only the prompt to create labels
-        prompt_encoded = self.tokenizer(
-            prompt,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt"
-        )
-        
-        # Create labels, masking the prompt portion with -100
-        labels = encoded["input_ids"].clone().squeeze(0)
-        prompt_length = prompt_encoded["input_ids"].shape[1]
-        labels[:prompt_length] = -100
-        
-        return {
-            "input_ids": encoded["input_ids"].squeeze(0),
-            "attention_mask": encoded["attention_mask"].squeeze(0),
-            "labels": labels
-        }
-
 def train_model(model_config):
     """Train the model for machine reading comprehension using language modeling approach."""
     logger.info(f"Starting training for {model_config.name} (MRC Task)")
@@ -190,14 +130,90 @@ def train_model(model_config):
 
     model, tokenizer = load_model_and_tokenizer(model_config)
 
-    # Load train dataset and split internally
-    logger.info(f"Loading and splitting train dataset from {JSON_TRAIN_DATASET_PATH}")
-    full_train_data = MachineReadingComprehensionDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    indices = list(range(len(full_train_data)))
-    train_data, val_data = train_test_split(indices, test_size=0.1, random_state=42, shuffle=True)
-    train_data = Subset(full_train_data, train_data)
+    # --- 데이터 로딩 (datasets 라이브러리 사용) ---
+    logger.info(f"Loading dataset from {JSON_TRAIN_DATASET_PATH}...")
+    try:
+        # 파일 전체가 리스트 형태라고 가정하고 로드 후 Dataset으로 변환
+        with open(JSON_TRAIN_DATASET_PATH, "r", encoding="utf-8") as f:
+            data_list = json.load(f)
+        from datasets import Dataset # datasets.Dataset import
+        full_dataset = Dataset.from_list(data_list)
+        logger.info(f"Loaded dataset with {len(full_dataset)} samples.")
 
-    # Data collator
+        # --- 데이터셋 분할 (datasets 라이브러리 기능 사용) ---
+        logger.info("Splitting dataset into train/validation (90/10)...")
+        split_dataset = full_dataset.train_test_split(test_size=0.1, seed=42, shuffle=True)
+        raw_train_dataset = split_dataset["train"]
+        raw_val_dataset = split_dataset["test"]
+        logger.info(f"Split complete - Train: {len(raw_train_dataset)} examples, Validation: {len(raw_val_dataset)} examples")
+
+    except Exception as e:
+        logger.error(f"Failed to load or split dataset: {e}")
+        raise e
+
+    # --- 전처리 함수 정의 (기존 Dataset 클래스의 __getitem__ 로직 활용) ---
+    def preprocess_mrc_data(examples, tokenizer, max_length=MAX_LENGTH):
+        processed_examples = {'input_ids': [], 'attention_mask': [], 'labels': []}
+        skipped_count = 0
+
+        # examples는 딕셔너리 형태의 배치
+        for i in range(len(examples['context'])): # 'context' 키가 있다고 가정 (데이터 구조 확인 필요)
+            title = examples['title'][i] if 'title' in examples else ""
+            context = examples['context'][i] if 'context' in examples else ""
+            question = examples['question'][i] if 'question' in examples else ""
+            # answers 구조 확인 필요: 'answers': {'text': ['ans']}
+            answers = examples['answers'][i] if 'answers' in examples else {'text': [""]}
+            answer_text = answers.get("text", [""])[0] if isinstance(answers.get("text"), list) and answers.get("text") else ""
+
+            if not context or not question:
+                skipped_count += 1
+                continue
+
+            prompt = f"Read the following passage and answer the question.\n\nTitle: {title}\n\nPassage: {context}\n\nQuestion: {question}\n\nAnswer:"
+            completion = f" {answer_text}"
+            full_text = prompt + completion
+
+            encoded = tokenizer(
+                full_text, truncation=True, max_length=max_length,
+                padding="max_length", # 콜레이터에서 처리하므로 False 가능
+            )
+            prompt_encoded = tokenizer(
+                prompt, truncation=True, max_length=max_length,
+                # padding=False # 프롬프트 길이는 가변적이므로 패딩 불필요
+            )
+
+            labels = list(encoded["input_ids"]) # 리스트로 변환
+            prompt_length = len(prompt_encoded["input_ids"]) # 패딩 안된 길이 사용
+            for k in range(min(prompt_length, len(labels))): # 길이 초과 방지
+                 labels[k] = -100
+
+            processed_examples['input_ids'].append(encoded['input_ids'])
+            processed_examples['attention_mask'].append(encoded['attention_mask'])
+            processed_examples['labels'].append(labels) # 리스트로 추가
+
+        if skipped_count > 0:
+            logger.warning(f"Skipped {skipped_count} examples in this batch.")
+
+        return processed_examples
+    # --- 전처리 함수 정의 끝 ---
+
+    # --- 전처리 (datasets.map 사용) ---
+    logger.info("Preprocessing datasets...")
+
+    # functools.partial 대신 lambda 사용
+    tokenized_train_dataset = raw_train_dataset.map(
+        lambda examples: preprocess_mrc_data(examples, tokenizer=tokenizer, max_length=MAX_LENGTH),
+        batched=True,
+        remove_columns=raw_train_dataset.column_names # 원본 컬럼 제거
+    )
+    tokenized_val_dataset = raw_val_dataset.map(
+        lambda examples: preprocess_mrc_data(examples, tokenizer=tokenizer, max_length=MAX_LENGTH),
+        batched=True,
+        remove_columns=raw_val_dataset.column_names
+    )
+    logger.info(f"Tokenized datasets prepared: train={len(tokenized_train_dataset)}, validation={len(tokenized_val_dataset)}")
+
+    # Data collator (Causal LM용)
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
     # Training arguments (기존 설정 유지)
@@ -235,8 +251,8 @@ def train_model(model_config):
     trainer = Trainer(
         model=model, 
         args=training_args, 
-        train_dataset=train_data,
-        eval_dataset=val_data, 
+        train_dataset=tokenized_train_dataset, # <-- 수정됨
+        eval_dataset=tokenized_val_dataset,   # <-- 수정됨
         data_collator=data_collator,
         callbacks=[early_stopping_callback],
         # compute_metrics는 Causal LM 학습 시 생략 가능

@@ -79,24 +79,30 @@ MODEL_CONFIGS = [
     #     is_local=True, # Assuming this is local based on path pattern
     #     output_dir="klue_dst_results/BERT-base-uncased-Tuned-klue-dst",
     # ),
-    # ModelConfig(
-    #     name="Llama-3.2-3b-it",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
-    #     output_dir="klue_dst_results/lora-llama3.2-3b-it-klue-dst",
-    #     is_local=True,
-    # ),
+    ModelConfig(
+        name="Llama-3.2-3b-it",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
+        output_dir="klue_dst_results/lora-llama3.2-3b-it-klue-dst",
+        is_local=True,
+    ),
     ModelConfig(
         name="Llama-3.1-8b-it",
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
         output_dir="klue_dst_results/lora-llama3.1-8b-it-klue-dst",
         is_local=True
     ),
+    # ModelConfig(
+    #     name="BERT-uncased-kr-eng-translation",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/bert-uncased-finetuned-kr-eng",
+    #     output_dir="klue_dst_results/llama3.1-8b-it-klue-dst",
+    #     is_local=True
+    # ),
 ]
 
 # 기본 설정
 DATA_CACHE_DIR = "./klue_dst_origin_cache"
-JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dst_train.json"
-MAX_LENGTH = 768  # DST는 대화 컨텍스트가 더 길 수 있으므로 길이 증가
+JSON_TRAIN_DATASET_PATH = "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dst_train_filtered.json"
+MAX_LENGTH = 712  # DST는 대화 컨텍스트가 더 길 수 있으므로 길이 증가
 
 # 데이터셋 준비 함수 - JSON 파일 생성
 def prepare_dataset_json():
@@ -297,9 +303,9 @@ def train_model(model_config):
         eval_strategy="steps", # eval_strategy 오타 수정
         eval_steps=400,
         learning_rate=2e-5,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
-        gradient_accumulation_steps=2,
+        per_device_train_batch_size=4,
+        per_device_eval_batch_size=4,
+        gradient_accumulation_steps=4,
         num_train_epochs=3,
         weight_decay=0.01,
         save_total_limit=3,
@@ -338,10 +344,10 @@ def train_model(model_config):
     )
     
     # 학습 실행
-    trainer.train()
+    trainer.train(resume_from_checkpoint=False)
     
     # 최종 모델 및 토크나이저 저장
-    final_model_path = os.path.join(model_config.output_dir, "final")
+    final_model_path = os.path.join(model_config.output_dir, "final_model")
     logger.info(f"Final Model: {final_model_path}")
     
     return model, tokenizer

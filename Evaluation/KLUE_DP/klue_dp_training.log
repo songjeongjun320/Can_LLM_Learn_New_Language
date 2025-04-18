@@ -363,3 +363,227 @@ torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.96 GiB. GPU 0 ha
 2025-04-15 17:41:28,129 - __main__ - INFO - Completed processing for Llama-3.1-8b-it
 2025-04-15 17:41:28,361 - __main__ - INFO - All results saved to: klue_dp_results/combined_results.json
 2025-04-15 17:41:28,361 - __main__ - INFO - KLUE-DP training and evaluation completed
+2025-04-16 11:12:06,944 - __main__ - INFO - Total number of KLUE-DP labels: 64
+2025-04-16 11:12:06,960 - __main__ - INFO - Starting KLUE-DP training and evaluation
+2025-04-16 11:12:06,961 - __main__ - INFO - Processing model: OLMo-1b-org
+2025-04-16 11:12:06,963 - __main__ - INFO - Starting training for OLMo-1b-org
+2025-04-16 11:12:06,963 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-04-16 11:12:06,964 - __main__ - INFO - Load model: allenai/OLMo-1B
+2025-04-16 11:12:22,777 - accelerate.utils.modeling - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+2025-04-16 11:12:22,781 - accelerate.utils.modeling - WARNING - The model weights are not tied. Please use the `tie_weights` method before using the `infer_auto_device` function.
+2025-04-16 11:12:29,603 - __main__ - INFO - Loading DP dataset from /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json
+2025-04-16 11:12:29,880 - __main__ - INFO - Loaded 10000 samples for dependency parsing
+2025-04-16 11:12:38,601 - __main__ - INFO - Initializing trainer
+2025-04-16 11:12:38,616 - accelerate.utils.other - WARNING - Detected kernel version 4.18.0, which is below the recommended minimum of 5.5.0; this can cause the process to hang. It is recommended to upgrade the kernel to the minimum version or higher.
+2025-04-16 11:12:38,625 - __main__ - INFO - Starting training
+2025-04-16 11:34:51,660 - __main__ - INFO - Saving final model to: klue_dp_results/olmo1B-org-klue-dp/final
+2025-04-16 11:34:54,992 - __main__ - INFO - Training completed for OLMo-1b-org
+2025-04-16 11:34:55,035 - __main__ - INFO - Evaluating model: OLMo-1b-org
+2025-04-16 11:49:25,946 - __main__ - INFO - Evaluation results for OLMo-1b-org:
+2025-04-16 11:49:26,041 - __main__ - INFO - UAS: 0.4663
+2025-04-16 11:49:26,041 - __main__ - INFO - LAS: 0.4430
+2025-04-16 11:49:26,042 - __main__ - INFO - Total tokens evaluated: 3052
+2025-04-16 11:49:26,506 - __main__ - INFO - Evaluation logs saved to: klue_dp_results/olmo1B-org-klue-dp/evaluation_log.json
+2025-04-16 11:49:26,507 - __main__ - INFO - Evaluation results saved to: klue_dp_results/olmo1B-org-klue-dp/eval_results.json
+2025-04-16 11:49:26,510 - __main__ - INFO - Completed processing for OLMo-1b-org
+2025-04-16 11:49:26,511 - __main__ - INFO - Processing model: OLMo-1b-Tuned
+2025-04-16 11:49:26,512 - __main__ - INFO - Starting training for OLMo-1b-Tuned
+2025-04-16 11:49:26,514 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-04-16 11:49:26,514 - __main__ - INFO - Load model: /scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo1B
+2025-04-16 11:49:29,543 - accelerate.utils.modeling - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+2025-04-16 11:49:29,547 - accelerate.utils.modeling - WARNING - The model weights are not tied. Please use the `tie_weights` method before using the `infer_auto_device` function.
+2025-04-16 11:49:36,289 - __main__ - INFO - Loading DP dataset from /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json
+2025-04-16 11:49:36,975 - __main__ - INFO - Loaded 10000 samples for dependency parsing
+2025-04-16 11:49:45,647 - __main__ - INFO - Initializing trainer
+2025-04-16 11:49:46,011 - accelerate.utils.other - WARNING - Detected kernel version 4.18.0, which is below the recommended minimum of 5.5.0; this can cause the process to hang. It is recommended to upgrade the kernel to the minimum version or higher.
+2025-04-16 11:49:46,106 - __main__ - INFO - Starting training
+2025-04-16 12:12:15,377 - __main__ - INFO - Saving final model to: klue_dp_results/olmo1B-v12-klue-dp/final
+2025-04-16 12:12:18,722 - __main__ - INFO - Training completed for OLMo-1b-Tuned
+2025-04-16 12:12:19,151 - __main__ - INFO - Evaluating model: OLMo-1b-Tuned
+2025-04-16 12:26:53,298 - __main__ - INFO - Evaluation results for OLMo-1b-Tuned:
+2025-04-16 12:26:53,345 - __main__ - INFO - UAS: 0.4469
+2025-04-16 12:26:53,345 - __main__ - INFO - LAS: 0.4253
+2025-04-16 12:26:53,346 - __main__ - INFO - Total tokens evaluated: 3052
+2025-04-16 12:26:53,596 - __main__ - INFO - Evaluation logs saved to: klue_dp_results/olmo1B-v12-klue-dp/evaluation_log.json
+2025-04-16 12:26:53,596 - __main__ - INFO - Evaluation results saved to: klue_dp_results/olmo1B-v12-klue-dp/eval_results.json
+2025-04-16 12:26:53,600 - __main__ - INFO - Completed processing for OLMo-1b-Tuned
+2025-04-16 12:26:53,600 - __main__ - INFO - Processing model: OLMo-7b-org
+2025-04-16 12:26:53,603 - __main__ - INFO - Starting training for OLMo-7b-org
+2025-04-16 12:26:53,618 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-04-16 12:26:53,618 - __main__ - INFO - Load model: allenai/OLMo-7B
+2025-04-16 12:26:56,891 - accelerate.utils.modeling - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+2025-04-16 12:26:56,900 - accelerate.utils.modeling - WARNING - The model weights are not tied. Please use the `tie_weights` method before using the `infer_auto_device` function.
+2025-04-16 12:27:40,161 - __main__ - INFO - Loading DP dataset from /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json
+2025-04-16 12:27:40,643 - __main__ - INFO - Loaded 10000 samples for dependency parsing
+2025-04-16 12:27:49,848 - __main__ - INFO - Initializing trainer
+2025-04-16 12:27:49,939 - accelerate.utils.other - WARNING - Detected kernel version 4.18.0, which is below the recommended minimum of 5.5.0; this can cause the process to hang. It is recommended to upgrade the kernel to the minimum version or higher.
+2025-04-16 12:27:50,035 - __main__ - INFO - Starting training
+2025-04-16 14:08:11,318 - __main__ - INFO - Saving final model to: klue_dp_results/olmo7B-org-klue-dp/final
+2025-04-16 14:08:31,926 - __main__ - INFO - Training completed for OLMo-7b-org
+2025-04-16 14:08:31,982 - __main__ - INFO - Evaluating model: OLMo-7b-org
+2025-04-16 14:37:05,682 - __main__ - INFO - Evaluation results for OLMo-7b-org:
+2025-04-16 14:37:05,779 - __main__ - INFO - UAS: 0.4774
+2025-04-16 14:37:05,779 - __main__ - INFO - LAS: 0.4590
+2025-04-16 14:37:05,780 - __main__ - INFO - Total tokens evaluated: 3052
+2025-04-16 14:37:06,037 - __main__ - INFO - Evaluation logs saved to: klue_dp_results/olmo7B-org-klue-dp/evaluation_log.json
+2025-04-16 14:37:06,038 - __main__ - INFO - Evaluation results saved to: klue_dp_results/olmo7B-org-klue-dp/eval_results.json
+2025-04-16 14:37:06,041 - __main__ - INFO - Completed processing for OLMo-7b-org
+2025-04-16 14:37:06,042 - __main__ - INFO - Processing model: OLMo-7b-Tuned
+2025-04-16 14:37:06,043 - __main__ - INFO - Starting training for OLMo-7b-Tuned
+2025-04-16 14:37:06,046 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-04-16 14:37:06,050 - __main__ - INFO - Load model: /scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B
+2025-04-16 14:37:07,240 - accelerate.utils.modeling - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+2025-04-16 14:37:07,247 - accelerate.utils.modeling - WARNING - The model weights are not tied. Please use the `tie_weights` method before using the `infer_auto_device` function.
+2025-04-16 14:37:29,297 - accelerate.big_modeling - WARNING - Some parameters are on the meta device because they were offloaded to the cpu.
+2025-04-16 14:37:29,298 - __main__ - INFO - Loading DP dataset from /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json
+2025-04-16 14:37:29,662 - __main__ - INFO - Loaded 10000 samples for dependency parsing
+2025-04-16 14:37:38,546 - __main__ - INFO - Initializing trainer
+2025-04-16 14:37:38,591 - accelerate.utils.other - WARNING - Detected kernel version 4.18.0, which is below the recommended minimum of 5.5.0; this can cause the process to hang. It is recommended to upgrade the kernel to the minimum version or higher.
+2025-04-16 14:37:38,592 - accelerate.big_modeling - WARNING - You shouldn't move a model that is dispatched using accelerate hooks.
+2025-04-16 14:37:38,592 - __main__ - ERROR - Error processing OLMo-7b-Tuned: You can't move a model that has some modules offloaded to cpu or disk.
+2025-04-16 14:37:38,593 - __main__ - ERROR - Exception details:
+Traceback (most recent call last):
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 533, in <module>
+    model, tokenizer = train_model(model_config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 353, in train_model
+    trainer = Trainer(
+              ^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/deprecation.py", line 172, in wrapped_func
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/trainer.py", line 614, in __init__
+    self._move_model_to_device(model, args.device)
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/trainer.py", line 901, in _move_model_to_device
+    model = model.to(device)
+            ^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/accelerate/big_modeling.py", line 459, in wrapper
+    raise RuntimeError("You can't move a model that has some modules offloaded to cpu or disk.")
+RuntimeError: You can't move a model that has some modules offloaded to cpu or disk.
+2025-04-16 14:37:38,710 - __main__ - INFO - Processing model: Llama-3.2:3B
+2025-04-16 14:37:38,714 - __main__ - INFO - Starting training for Llama-3.2:3B
+2025-04-16 14:37:38,715 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-04-16 14:37:38,716 - __main__ - INFO - Load model: /scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b
+2025-04-16 14:37:38,716 - __main__ - ERROR - Error processing Llama-3.2:3B: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b'. Use `repo_type` argument if needed.
+2025-04-16 14:37:38,717 - __main__ - ERROR - Exception details:
+Traceback (most recent call last):
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 424, in cached_files
+    hf_hub_download(
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b'. Use `repo_type` argument if needed.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 533, in <module>
+    model, tokenizer = train_model(model_config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 300, in train_model
+    model, tokenizer = load_model_and_tokenizer(model_config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 206, in load_model_and_tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/models/auto/tokenization_auto.py", line 946, in from_pretrained
+    tokenizer_config = get_tokenizer_config(pretrained_model_name_or_path, **kwargs)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/models/auto/tokenization_auto.py", line 778, in get_tokenizer_config
+    resolved_config_file = cached_file(
+                           ^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 266, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 470, in cached_files
+    resolved_files = [
+                     ^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 471, in <listcomp>
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision) for filename in full_filenames
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 134, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(path_or_repo_id, full_filename, cache_dir=cache_dir, revision=revision)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b'. Use `repo_type` argument if needed.
+2025-04-16 14:37:39,068 - __main__ - INFO - All results saved to: klue_dp_results/combined_results.json
+2025-04-16 14:37:39,069 - __main__ - INFO - KLUE-DP training and evaluation completed
+2025-04-16 15:10:11,468 - __main__ - INFO - Total number of KLUE-DP labels: 64
+2025-04-16 15:10:11,539 - __main__ - INFO - Starting KLUE-DP training and evaluation
+2025-04-16 15:10:11,540 - __main__ - INFO - Processing model: OLMo-7b-Tuned
+2025-04-16 15:10:11,540 - __main__ - INFO - Starting training for OLMo-7b-Tuned
+2025-04-16 15:10:11,586 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-04-16 15:10:11,586 - __main__ - INFO - Load model: /scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_olmo7B
+2025-04-16 15:10:48,141 - accelerate.utils.modeling - INFO - We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+2025-04-16 15:10:48,150 - accelerate.utils.modeling - WARNING - The model weights are not tied. Please use the `tie_weights` method before using the `infer_auto_device` function.
+2025-04-16 15:11:06,069 - __main__ - INFO - Loading DP dataset from /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json
+2025-04-16 15:11:06,430 - __main__ - INFO - Loaded 10000 samples for dependency parsing
+2025-04-16 15:11:15,035 - __main__ - INFO - Initializing trainer
+2025-04-16 15:11:15,780 - accelerate.utils.other - WARNING - Detected kernel version 4.18.0, which is below the recommended minimum of 5.5.0; this can cause the process to hang. It is recommended to upgrade the kernel to the minimum version or higher.
+2025-04-16 15:11:15,786 - __main__ - INFO - Starting training
+2025-04-16 16:51:12,419 - __main__ - INFO - Saving final model to: klue_dp_results/olmo7B-v13-klue-dp/final
+2025-04-16 16:51:30,438 - __main__ - INFO - Training completed for OLMo-7b-Tuned
+2025-04-16 16:51:30,481 - __main__ - INFO - Evaluating model: OLMo-7b-Tuned
+2025-04-16 17:20:36,121 - __main__ - INFO - Evaluation results for OLMo-7b-Tuned:
+2025-04-16 17:20:36,154 - __main__ - INFO - UAS: 0.4626
+2025-04-16 17:20:36,154 - __main__ - INFO - LAS: 0.4407
+2025-04-16 17:20:36,155 - __main__ - INFO - Total tokens evaluated: 3052
+2025-04-16 17:20:36,240 - __main__ - INFO - Evaluation logs saved to: klue_dp_results/olmo7B-v13-klue-dp/evaluation_log.json
+2025-04-16 17:20:36,240 - __main__ - INFO - Evaluation results saved to: klue_dp_results/olmo7B-v13-klue-dp/eval_results.json
+2025-04-16 17:20:36,243 - __main__ - INFO - Completed processing for OLMo-7b-Tuned
+2025-04-16 17:20:36,243 - __main__ - INFO - Processing model: Llama-3.2:3B
+2025-04-16 17:20:36,244 - __main__ - INFO - Starting training for Llama-3.2:3B
+2025-04-16 17:20:36,245 - __main__ - INFO - Dataset already exists: /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_train.json and /scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/klue_all_tasks_json/klue_dp_validation.json
+2025-04-16 17:20:36,245 - __main__ - INFO - Load model: /scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b
+2025-04-16 17:20:36,246 - __main__ - ERROR - Error processing Llama-3.2:3B: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b'. Use `repo_type` argument if needed.
+2025-04-16 17:20:36,246 - __main__ - ERROR - Exception details:
+Traceback (most recent call last):
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 424, in cached_files
+    hf_hub_download(
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b'. Use `repo_type` argument if needed.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 533, in <module>
+    model, tokenizer = train_model(model_config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 300, in train_model
+    model, tokenizer = load_model_and_tokenizer(model_config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/Evaluation/KLUE_DP/KLUE_DP_Full_eval.py", line 206, in load_model_and_tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/models/auto/tokenization_auto.py", line 946, in from_pretrained
+    tokenizer_config = get_tokenizer_config(pretrained_model_name_or_path, **kwargs)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/models/auto/tokenization_auto.py", line 778, in get_tokenizer_config
+    resolved_config_file = cached_file(
+                           ^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 266, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 470, in cached_files
+    resolved_files = [
+                     ^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 471, in <listcomp>
+    _get_cache_file_to_return(path_or_repo_id, filename, cache_dir, revision) for filename in full_filenames
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/transformers/utils/hub.py", line 134, in _get_cache_file_to_return
+    resolved_file = try_to_load_from_cache(path_or_repo_id, full_filename, cache_dir=cache_dir, revision=revision)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 106, in _inner_fn
+    validate_repo_id(arg_value)
+  File "/scratch/jsong132/Can_LLM_Learn_New_Language/venv/lib64/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 154, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': '/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b'. Use `repo_type` argument if needed.
+2025-04-16 17:20:36,478 - __main__ - INFO - All results saved to: klue_dp_results/combined_results.json
+2025-04-16 17:20:36,479 - __main__ - INFO - KLUE-DP training and evaluation completed
