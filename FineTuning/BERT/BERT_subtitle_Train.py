@@ -18,8 +18,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # --- 설정 ---
 # DATA_DIR = "/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/KR_ENG_Dataset_Refined" # 번역 데이터셋
-VERSION = "v1"
-DATA_DIR = "/scratch/jsong132/Can_LLM_Learn_New_Language/DB/Refined_Datas/v2" # 자막:영어 데이터셋
+VERSION = "v2"
+DATA_DIR = "/scratch/jsong132/Can_LLM_Learn_New_Language/DB/Refined_Datas/v2/Data_Final_Reversed" # 자막:영어 데이터셋
 MODEL_NAME = "bert-base-uncased" # 사용할 BERT 모델
 OUTPUT_DIR = f"./Tuned_Results/bert-uncased-finetuned-subtitle_dt_{VERSION}" # 파인튜닝된 모델 저장 경로
 CACHE_DIR = "./cache_subtitle" # 데이터셋 캐시 저장 경로 (선택 사항)

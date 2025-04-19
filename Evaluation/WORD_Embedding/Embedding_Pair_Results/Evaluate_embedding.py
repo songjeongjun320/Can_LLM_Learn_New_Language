@@ -68,18 +68,25 @@ MODEL_CONFIGS = [
     # ),
 
     # --- Encoder Model ---
-    ModelConfig(
-         name="BERT-base-uncased",
-         model_path="bert-base-uncased",
-         is_local=False,
-         model_type="encoder"
-     ),
+    # ModelConfig(
+    #      name="BERT-base-uncased",
+    #      model_path="bert-base-uncased",
+    #      is_local=False,
+    #      model_type="encoder"
+    #  ),
+    # ModelConfig(
+    #      name="BERT-base-uncased",
+    #      model_path="bert-base-uncased",
+    #      is_local=False,
+    #      model_type="encoder"
+    #  ),
     # ModelConfig(
     #     name="bert-uncased-finetuned-kr-eng-v2",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-kr-eng-v2",
     #     is_local=True, # Assuming this is local based on path pattern
     #     model_type="encoder"
     # ),
+    
     # ModelConfig(
     #     name="bert-base-uncased-CAUSAL-LM-Tuning",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/BERT-base-uncased-CAUSAL-LM-Tuning",
@@ -92,7 +99,12 @@ MODEL_CONFIGS = [
     #     is_local=True, # Assuming this is local based on path pattern
     #     model_type="encoder"
     # ),
-
+    ModelConfig(
+        name="bert-uncased-finetuned-subtitle_dt-used-reverse-v2",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt_v2",
+        is_local=True, # Assuming this is local based on path pattern
+        model_type="encoder"
+    ),
     # # --- Encoder-Decoder Model ---
     # ModelConfig(
     #     name="T5-base",

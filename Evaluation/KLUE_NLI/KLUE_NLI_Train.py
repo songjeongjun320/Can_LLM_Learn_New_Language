@@ -104,11 +104,17 @@ MODEL_CONFIGS = [
     #     output_dir="klue_nli_results/BERT-uncased-kr-eng-translation-klue-nli",
     #     is_local=True
     # ),
+    # ModelConfig(
+    #     name="BERT-base-uncased-Subtitle-Tuned",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt",
+    #     is_local=True, # Assuming this is local based on path pattern
+    #     output_dir="klue_nli_results/BERT-base-uncased-Subtitle-Tuned-klue-nli",
+    # ),
     ModelConfig(
-        name="BERT-base-uncased-Subtitle-Tuned",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt",
+        name="BERT-base-uncased-Subtitle-Reversed-Tuned",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt_v2",
         is_local=True, # Assuming this is local based on path pattern
-        output_dir="klue_nli_results/BERT-base-uncased-Subtitle-Tuned-klue-nli",
+        output_dir="klue_nli_results/BERT-base-uncased-Subtitle-Reversed-Tuned-klue-nli",
     ),
 ]
 # Configuration parameters

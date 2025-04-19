@@ -78,12 +78,12 @@ MODEL_CONFIGS = [
     # ),
 
     # BERT Models
-    ModelConfig(
-        name="BERT-base-uncased-origin",
-        model_path="google-bert/bert-base-uncased",
-        is_local=False,
-        output_dir="klue_sts_results/BERT-base-uncased-origin-klue-sts",
-    ),
+    # ModelConfig(
+    #     name="BERT-base-uncased-origin",
+    #     model_path="google-bert/bert-base-uncased",
+    #     is_local=False,
+    #     output_dir="klue_sts_results/BERT-base-uncased-origin-klue-sts",
+    # ),
     # ModelConfig(
     #     name="BERT-base-uncased-Tuned",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/Full_BERT-base-uncased",
@@ -96,6 +96,12 @@ MODEL_CONFIGS = [
     #     is_local=True, # Assuming this is local based on path pattern
     #     output_dir="klue_sts_results/BERT-base-uncased-Subtitle-Tuned-klue-sts",
     # ),
+    ModelConfig(
+        name="BERT-base-uncased-Subtitle-Reversed-Tuned",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt_v2",
+        is_local=True, # Assuming this is local based on path pattern
+        output_dir="klue_sts_results/BERT-base-uncased-Subtitle-Reversed-Tuned-klue-sts",
+    ),
     # ModelConfig(
     #     name="BERT-uncased-kr-eng-translation",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/bert-uncased-finetuned-kr-eng",
