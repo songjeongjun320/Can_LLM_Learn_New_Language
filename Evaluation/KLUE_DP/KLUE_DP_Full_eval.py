@@ -8,15 +8,10 @@ from transformers import (
     AutoTokenizer,
     TrainingArguments,
     Trainer,
-<<<<<<< HEAD
     EarlyStoppingCallback,
     DataCollatorForLanguageModeling
 )
 from sklearn.model_selection import train_test_split  # 여기가 핵심!
-=======
-    EarlyStoppingCallback
-)
->>>>>>> 3ddccff (KLUE EVAL ALL)
 from sklearn.metrics import accuracy_score, f1_score
 import logging
 from tqdm import tqdm
@@ -52,23 +47,15 @@ logger.info(f"Total number of KLUE-DP labels: {NUM_LABELS}")
 
 # Model configuration class (from first code)
 class ModelConfig:
-<<<<<<< HEAD
     def __init__(self, name, model_path, output_dir, is_local):
         self.name = name
         self.model_path = model_path
         self.output_dir = output_dir
         self.is_local = is_local
-=======
-    def __init__(self, name, model_path, output_dir):
-        self.name = name
-        self.model_path = model_path
-        self.output_dir = output_dir
->>>>>>> 3ddccff (KLUE EVAL ALL)
 
 # Model configurations (from first code)
 MODEL_CONFIGS = [
     # ModelConfig(
-<<<<<<< HEAD
     #     name="OLMo-1b-org", 
     #     model_path="allenai/OLMo-1B", 
     #     output_dir="klue_dp_results/olmo1B-org-klue-dp",
@@ -122,32 +109,6 @@ MODEL_CONFIGS = [
         is_local=True, # Assuming this is local based on path pattern
         output_dir="klue_dp_results/BERT-uncased-kr-eng-translation-klue-dp",
     ),
-=======
-    #     name="full-OLMo-7b-org", 
-    #     model_path="allenai/OLMo-7B", 
-    #     output_dir="klue_dp_results/full-olmo7B-org-klue-dp"
-    # ),
-    ModelConfig(
-        name="full-OLMo-1b-org", 
-        model_path="allenai/OLMo-1B", 
-        output_dir="klue_dp_results/full-olmo1B-org-klue-dp"
-    ),
-    ModelConfig(
-        name="full-OLMo-1b-v12", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo1B-v12", 
-        output_dir="klue_dp_results/full-olmo1B-v12-klue-dp"
-    ),
-    ModelConfig(
-        name="full-OLMo-7b-v13", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/Fine_Tuned_Results/olmo7B-v13", 
-        output_dir="klue_dp_results/full-olmo7B-v13-klue-dp"
-    ),
-    ModelConfig(
-        name="full-Llama-3.2:3B", 
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-        output_dir="klue_dp_results/full-llama3.2-3b-klue-dp"
-    )
->>>>>>> 3ddccff (KLUE EVAL ALL)
 ]
 
 # Configuration parameters
@@ -234,7 +195,6 @@ def prepare_dataset_json():
 
 # Model and tokenizer loading function (from first code)
 def load_model_and_tokenizer(model_config):
-<<<<<<< HEAD
     """모델 설정에 따라 모델과 토크나이저를 로드합니다."""
     logger.info(f"Load model: {model_config.model_path}")
 
@@ -262,36 +222,6 @@ def load_model_and_tokenizer(model_config):
         trust_remote_code=True  # OLMo 모델에 필요
     )
     
-=======
-    """Load model and tokenizer based on model configuration."""
-    logger.info(f"Loading model: {model_config.model_path}")
-
-    # Check if the model is a local path
-    is_local = os.path.exists(model_config.model_path)
-    logger.info(f"Model is local: {is_local}")
-    
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_config.model_path, 
-        trust_remote_code=True,
-        local_files_only=is_local
-    )
-    
-    # Set pad token if needed
-    if tokenizer.pad_token is None:
-        logger.info("Setting pad_token to eos_token")
-        tokenizer.pad_token = tokenizer.eos_token
-    
-    # Load model with bfloat16 precision for memory efficiency
-    logger.info(f"Loading model with bfloat16 precision...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_config.model_path,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",  # Automatically distribute model across GPUs
-        trust_remote_code=True  # Required for OLMo models
-    )
-    
-    logger.info(f"Model loaded successfully: {model_config.name}")
->>>>>>> 3ddccff (KLUE EVAL ALL)
     return model, tokenizer
 
 # Custom Dataset for KLUE-DP
@@ -355,113 +285,6 @@ class DependencyParsingDataset(Dataset):
             "labels": labels
         }
 
-<<<<<<< HEAD
-=======
-# Biaffine layer for arc scoring
-class Biaffine(torch.nn.Module):
-    def __init__(self, in1_dim, in2_dim, bias=True):
-        super().__init__()
-        self.weight = torch.nn.Parameter(torch.randn(in1_dim, in2_dim))
-        self.bias = bias
-        if bias:
-            self.bias1 = torch.nn.Parameter(torch.randn(in1_dim))
-            self.bias2 = torch.nn.Parameter(torch.randn(in2_dim))
-        self.init_weights()
-    
-    def init_weights(self):
-        torch.nn.init.xavier_uniform_(self.weight)
-        if self.bias:
-            torch.nn.init.zeros_(self.bias1)
-            torch.nn.init.zeros_(self.bias2)
-    
-    def forward(self, x1, x2):
-        batch, len1, dim1 = x1.size()
-        batch, len2, dim2 = x2.size()
-        
-        if self.bias:
-            x1 = x1 + self.bias1.unsqueeze(0).unsqueeze(0)
-            x2 = x2 + self.bias2.unsqueeze(0).unsqueeze(0)
-        
-        part1 = torch.matmul(x1.reshape(-1, dim1), self.weight)
-        part1 = part1.reshape(batch, len1, dim2)
-        scores = torch.bmm(part1, x2.transpose(1, 2))
-        
-        return scores
-
-# Dependency Parser model
-class DependencyParser(torch.nn.Module):
-    def __init__(self, base_model, tokenizer):
-        super().__init__()
-        self.base_model = base_model
-        self.tokenizer = tokenizer
-        self.hidden_size = base_model.config.hidden_size
-        
-        # Add dependency parsing specific layers
-        self.arc_biaffine = Biaffine(self.hidden_size, self.hidden_size, bias=True)
-        self.label_classifier = torch.nn.Linear(self.hidden_size, NUM_LABELS)
-        self.init_weights()
-        
-        logger.info(f"Initialized dependency parser with hidden size: {self.hidden_size}")
-        
-    def init_weights(self):
-        torch.nn.init.xavier_uniform_(self.label_classifier.weight)
-        self.label_classifier.bias.data.zero_()
-        
-    def gradient_checkpointing_enable(self):
-        if hasattr(self.base_model, 'gradient_checkpointing_enable'):
-            self.base_model.gradient_checkpointing_enable()
-            logger.info("Gradient checkpointing enabled")
-        else:
-            logger.warning("Gradient checkpointing not available for this model")
-        
-    def forward(self, input_ids, attention_mask, word_attention_mask=None, head_indices=None, deprel_labels=None, labels=None):
-        # Get base model outputs
-        outputs = self.base_model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            labels=labels,
-            output_hidden_states=True
-        )
-        
-        # If training with language modeling loss, return base model outputs
-        if labels is not None:
-            return outputs
-        
-        # For dependency parsing specific tasks
-        hidden_states = outputs.hidden_states[-1]
-        
-        batch_size, seq_len, hidden_dim = hidden_states.shape
-        
-        # Get arc scores and label logits
-        arc_scores = self.arc_biaffine(hidden_states, hidden_states)
-        label_logits = self.label_classifier(hidden_states)
-        
-        loss = None
-        if head_indices is not None and deprel_labels is not None:
-            arc_loss = F.cross_entropy(
-                arc_scores.view(-1, seq_len),
-                head_indices.view(-1),
-                ignore_index=-100
-            )
-            
-            label_loss = F.cross_entropy(
-                label_logits.view(-1, NUM_LABELS),
-                deprel_labels.view(-1),
-                ignore_index=-100
-            )
-            
-            loss = arc_loss + label_loss
-        
-        return {
-            "loss": loss,
-            "arc_scores": arc_scores,
-            "label_logits": label_logits
-        }
-
-# Custom Trainer for language modeling approach
-from transformers import DataCollatorForLanguageModeling
-
->>>>>>> 3ddccff (KLUE EVAL ALL)
 def train_model(model_config):
     """Train the model for dependency parsing using language modeling approach."""
     logger.info(f"Starting training for {model_config.name}")
@@ -476,7 +299,6 @@ def train_model(model_config):
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(model_config)
     
-<<<<<<< HEAD
     # 1. 원본 데이터 로드
     full_train_data = DependencyParsingDataset(JSON_TRAIN_DATASET_PATH, tokenizer)  # 전체 훈련 데이터
 
@@ -486,13 +308,6 @@ def train_model(model_config):
         random_state=42,  # 재현성 보장
         shuffle=True
     )
-=======
-    # Load datasets
-    logger.info("Loading train and validation datasets")
-    train_dataset = DependencyParsingDataset(JSON_TRAIN_DATASET_PATH, tokenizer)
-    val_dataset = DependencyParsingDataset(JSON_VAL_DATASET_PATH, tokenizer)
-    logger.info(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
->>>>>>> 3ddccff (KLUE EVAL ALL)
     
     # Data collator for language modeling
     data_collator = DataCollatorForLanguageModeling(
@@ -500,28 +315,16 @@ def train_model(model_config):
         mlm=False
     )
     
-<<<<<<< HEAD
     # TrainingArguments (이전 설정 사용)
     training_args = TrainingArguments(
         output_dir=model_config.output_dir,
         eval_strategy="steps", # eval_strategy 오타 수정
         eval_steps=400,
-=======
-    # Training arguments
-    training_args = TrainingArguments(
-        output_dir=model_config.output_dir,
-        evaluation_strategy="steps",
-        eval_steps=200,
->>>>>>> 3ddccff (KLUE EVAL ALL)
         learning_rate=2e-5,
         per_device_train_batch_size=4,
         per_device_eval_batch_size=4,
         gradient_accumulation_steps=4,
-<<<<<<< HEAD
         num_train_epochs=3,
-=======
-        num_train_epochs=5,
->>>>>>> 3ddccff (KLUE EVAL ALL)
         weight_decay=0.01,
         save_total_limit=3,
         save_strategy="steps",
@@ -529,23 +332,14 @@ def train_model(model_config):
         logging_dir=os.path.join(model_config.output_dir, "logs"),
         logging_steps=100,
         fp16=False,
-<<<<<<< HEAD
         bf16=True,
-=======
-        bf16=True,  # Use bfloat16 precision
->>>>>>> 3ddccff (KLUE EVAL ALL)
         lr_scheduler_type="cosine",
         warmup_ratio=0.1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
-<<<<<<< HEAD
         greater_is_better=False,
         report_to="none",
         gradient_checkpointing=True,
-=======
-        report_to="none",
-        gradient_checkpointing=True,  # Enable gradient checkpointing for memory efficiency
->>>>>>> 3ddccff (KLUE EVAL ALL)
         optim="adamw_torch",
     )
     
@@ -559,13 +353,8 @@ def train_model(model_config):
     trainer = Trainer(
         model=model,
         args=training_args,
-<<<<<<< HEAD
         train_dataset=train_data,
         eval_dataset=val_data,
-=======
-        train_dataset=train_dataset,
-        eval_dataset=val_dataset,
->>>>>>> 3ddccff (KLUE EVAL ALL)
         data_collator=data_collator,
         callbacks=[early_stopping_callback],
     )
