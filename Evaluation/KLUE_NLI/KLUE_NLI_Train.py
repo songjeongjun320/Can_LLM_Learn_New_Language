@@ -86,12 +86,12 @@ MODEL_CONFIGS = [
     #     output_dir="klue_nli_results/llama3.2-3b-it-klue-nli",
     #     is_local=True,
     # ),
-    ModelConfig(
-        name="Llama-3.1-8b-it",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
-        output_dir="klue_nli_results/llama3.1-8b-it-klue-nli",
-        is_local=True
-    ),
+    # ModelConfig(
+    #     name="Llama-3.1-8b-it",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
+    #     output_dir="klue_nli_results/llama3.1-8b-it-klue-nli",
+    #     is_local=True
+    # ),
     # ModelConfig(
     #     name="BERT-uncased-origin-translation",
     #     model_path="google-bert/bert-base-uncased",
@@ -104,6 +104,12 @@ MODEL_CONFIGS = [
     #     output_dir="klue_nli_results/BERT-uncased-kr-eng-translation-klue-nli",
     #     is_local=True
     # ),
+    ModelConfig(
+        name="BERT-base-uncased-Subtitle-Tuned",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt",
+        is_local=True, # Assuming this is local based on path pattern
+        output_dir="klue_nli_results/BERT-base-uncased-Subtitle-Tuned-klue-nli",
+    ),
 ]
 # Configuration parameters
 DATA_CACHE_DIR = "./klue_nli_cache"

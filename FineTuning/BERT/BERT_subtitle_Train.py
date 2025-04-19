@@ -17,11 +17,12 @@ import sys
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- 설정 ---
-VERSION = "v2"
-DATA_DIR = "/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/KR_ENG_Dataset_Refined" # 번역 데이터셋
+# DATA_DIR = "/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/KR_ENG_Dataset_Refined" # 번역 데이터셋
+VERSION = "v1"
+DATA_DIR = "/scratch/jsong132/Can_LLM_Learn_New_Language/DB/Refined_Datas/v2" # 자막:영어 데이터셋
 MODEL_NAME = "bert-base-uncased" # 사용할 BERT 모델
-OUTPUT_DIR = f"./Tune_Results/bert-uncased-finetuned-kr-eng-{VERSION}" # 파인튜닝된 모델 저장 경로
-CACHE_DIR = "./cache" # 데이터셋 캐시 저장 경로 (선택 사항)
+OUTPUT_DIR = f"./Tuned_Results/bert-uncased-finetuned-subtitle_dt_{VERSION}" # 파인튜닝된 모델 저장 경로
+CACHE_DIR = "./cache_subtitle" # 데이터셋 캐시 저장 경로 (선택 사항)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # 학습 파라미터
@@ -31,7 +32,7 @@ PER_DEVICE_EVAL_BATCH_SIZE = 32
 LEARNING_RATE = 5e-5
 WEIGHT_DECAY = 0.01
 LOGGING_STEPS = 100
-SAVE_STEPS = 2000 # 모델 체크포인트 저장 간격
+SAVE_STEPS = 200 # 모델 체크포인트 저장 간격
 MAX_SEQ_LENGTH = 512 # 입력 시퀀스 최대 길이 (BERT는 보통 512)
 MLM_PROBABILITY = 0.15 # MLM에서 마스킹할 토큰 비율
 TRAIN_TEST_SPLIT_RATIO = 0.1 # 검증 세트 비율

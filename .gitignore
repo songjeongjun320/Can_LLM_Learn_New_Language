@@ -62,6 +62,8 @@ klue_sts_regression_eval_cache/
 *cache*
 *cache*/
 klue_sts_origin_cache/
+Tuned_Results/
+logs/
 
 
 *.log
