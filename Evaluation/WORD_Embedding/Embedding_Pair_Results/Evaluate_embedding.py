@@ -54,12 +54,12 @@ MODEL_CONFIGS = [
     #     is_local=True,
     #     model_type="causal"
     # ),
-    # ModelConfig(
-    #     name="Llama-3.2-3b",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
-    #     is_local=True,
-    #     model_type="causal"
-    # ),
+    ModelConfig(
+        name="Llama-3.2-3b",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b",
+        is_local=True,
+        model_type="causal"
+    ),
     # ModelConfig(
     #     name="Llama-4-Scout-17B-16E",
     #     model_path="meta-llama/Llama-4-Scout-17B-16E",
@@ -68,24 +68,18 @@ MODEL_CONFIGS = [
     # ),
 
     # --- Encoder Model ---
-    # ModelConfig(
-    #      name="BERT-base-uncased",
-    #      model_path="bert-base-uncased",
-    #      is_local=False,
-    #      model_type="encoder"
-    #  ),
-    # ModelConfig(
-    #      name="BERT-base-uncased",
-    #      model_path="bert-base-uncased",
-    #      is_local=False,
-    #      model_type="encoder"
-    #  ),
-    # ModelConfig(
-    #     name="bert-uncased-finetuned-kr-eng-v2",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-kr-eng-v2",
-    #     is_local=True, # Assuming this is local based on path pattern
-    #     model_type="encoder"
-    # ),
+    ModelConfig(
+         name="BERT-base-uncased",
+         model_path="bert-base-uncased",
+         is_local=False,
+         model_type="encoder"
+     ),
+    ModelConfig(
+        name="bert-uncased-finetuned-kr-eng-v2",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-kr-eng-v2",
+        is_local=True, # Assuming this is local based on path pattern
+        model_type="encoder"
+    ),
     
     # ModelConfig(
     #     name="bert-base-uncased-CAUSAL-LM-Tuning",
@@ -93,12 +87,18 @@ MODEL_CONFIGS = [
     #     is_local=True, # Assuming this is local based on path pattern
     #     model_type="encoder"
     # ),
-    # ModelConfig(
-    #     name="bert-uncased-finetuned-subtitle_dt",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt",
-    #     is_local=True, # Assuming this is local based on path pattern
-    #     model_type="encoder"
-    # ),
+    ModelConfig(
+        name="bert-uncased-finetuned-subtitle_dt",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt",
+        is_local=True, # Assuming this is local based on path pattern
+        model_type="encoder"
+    ),
+    ModelConfig(
+        name="bert-uncased-finetuned-subtitle_dt-used-reverse-v1",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt_v1",
+        is_local=True, # Assuming this is local based on path pattern
+        model_type="encoder"
+    ),
     ModelConfig(
         name="bert-uncased-finetuned-subtitle_dt-used-reverse-v2",
         model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt_v2",
@@ -118,18 +118,18 @@ MODEL_CONFIGS = [
     #     is_local=True, # Assuming this is local based on path pattern
     #     model_type="encoder-decoder"
     # ),
-    # ModelConfig(
-    #     name="Llama-3.2-3b-it",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
-    #     is_local=True,
-    #     model_type="causal"
-    # ),
-    # ModelConfig(
-    #     name="Llama-3.1-8b-it",
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
-    #     is_local=True,
-    #     model_type="causal"
-    # ),
+    ModelConfig(
+        name="Llama-3.2-3b-it",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
+        is_local=True,
+        model_type="causal"
+    ),
+    ModelConfig(
+        name="Llama-3.1-8b-it",
+        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.1-8B-Instruct",
+        is_local=True,
+        model_type="causal"
+    ),
 ]
 
 # --- Configuration ---
