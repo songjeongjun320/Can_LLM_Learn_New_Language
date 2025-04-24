@@ -74,12 +74,12 @@ MODEL_CONFIGS = [
     #     output_dir="klue_nli_results/full-olmo7B-v13-klue-nli",
     #     is_local=True
     # ),
-    #     ModelConfig(
-    #     name="full-Llama-3.2-3b", 
-    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/llama3.2_3b", 
-    #     output_dir="klue_nli_results/full-llama3.2-3b-klue-nli",
-    #     is_local=True
-    # ),
+        ModelConfig(
+        name="Llama-3.2-3b", 
+        model_path="meta-llama/Llama-3.2-3B", 
+        output_dir="klue_nli_results/full-llama3.2-3b-klue-nli",
+        is_local=False
+    ),
     # ModelConfig(
     #     name="Llama-3.2-3b-it",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/downloaded_models/Llama-3.2-3B-Instruct",
@@ -116,12 +116,12 @@ MODEL_CONFIGS = [
     #     is_local=True, # Assuming this is local based on path pattern
     #     output_dir="klue_nli_results/BERT-base-uncased-Subtitle-Reversed-Tuned-klue-nli",
     # ),
-    ModelConfig(
-        name="bert-uncased-finetuned-subtitle_dt_v1",
-        model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt_v1",
-        is_local=True, # Assuming this is local based on path pattern
-        output_dir="klue_nli_results/bert-uncased-finetuned-subtitle_dt_v1-klue-nli",
-    ),
+    # ModelConfig(
+    #     name="bert-uncased-finetuned-subtitle_dt_v1",
+    #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt_v1",
+    #     is_local=True, # Assuming this is local based on path pattern
+    #     output_dir="klue_nli_results/bert-uncased-finetuned-subtitle_dt_v1-klue-nli",
+    # ),
     # ModelConfig(
     #     name="bert-uncased-finetuned-subtitle_dt_v2",
     #     model_path="/scratch/jsong132/Can_LLM_Learn_New_Language/FineTuning/BERT/Tuned_Results/bert-uncased-finetuned-subtitle_dt_v2",
